@@ -22,6 +22,7 @@ class PornFile(Base):
     __tablename__ = 'file'
     id_ = sql.Column('id', sql.Integer, primary_key=True)
     hash_ = sql.Column('hash', sql.String)
+    # 0 is not active
     active = sql.Column(sql.Integer)
     size = sql.Column(sql.Integer)
     _type = sql.Column('type', sql.String)
@@ -38,7 +39,6 @@ class PornFile(Base):
 class MovieFile(PornFile):
     __tablename__ = 'movie'
     id_ = sql.Column('file_id', sql.Integer, sql.ForeignKey('file.id'), primary_key=True)
-    rating_adjustment = sql.Column(sql.Float)
     last = sql.Column(sql.DateTime)
 
     girls = orm.relationship(
@@ -71,13 +71,23 @@ class Girl(Base):
 class FilePath(Base):
     __tablename__ = 'file_path'
     file_id = sql.Column(sql.Integer, sql.ForeignKey('file.id'))
+    hostname = sql.Column(sql.String, primary_key=True)
     path = sql.Column(sql.String, primary_key=True)
+
+    def __repr__(self):
+        return '{}({}, {})'.format(self.__class__.__name__, self.hostname, self.path)
 
 
 class Tag(Base):
     __tablename__ = 'tag'
     id_ = sql.Column('id', sql.Integer, primary_key=True)
     tag = sql.Column(sql.String)
+
+
+class NormalRating(Base):
+    __tablename__ = 'normalrating'
+    file_id = sql.Column(sql.Integer, sql.ForeignKey('file.id'), primary_key=True)
+    rating_adjustment = sql.Column(sql.Float)
 
 
 Usage = sql.Table(
