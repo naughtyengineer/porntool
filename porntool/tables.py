@@ -17,12 +17,16 @@ girl_tag_association = sql.Table('girl_tag', Base.metadata,
     sql.Column('tag_id', sql.Integer, sql.ForeignKey('tag.id')),
     sql.Column('girl_id', sql.Integer, sql.ForeignKey('girl.id')))
 
+clip_tag_association = sql.Table('clip_tag', Base.metadata,
+    sql.Column('tag_id', sql.Integer, sql.ForeignKey('tag.id')),
+    sql.Column('clip_id', sql.Integer, sql.ForeignKey('clip.id')))
+
 
 class PornFile(Base):
     __tablename__ = 'file'
     id_ = sql.Column('id', sql.Integer, primary_key=True)
     hash_ = sql.Column('hash', sql.String)
-    # 0 is not active
+    # 0 means not active
     active = sql.Column(sql.Integer)
     size = sql.Column(sql.Integer)
     _type = sql.Column('type', sql.String)
@@ -88,6 +92,28 @@ class NormalRating(Base):
     __tablename__ = 'normalrating'
     file_id = sql.Column(sql.Integer, sql.ForeignKey('file.id'), primary_key=True)
     rating_adjustment = sql.Column(sql.Float)
+
+
+class Clip(Base):
+    """tag subsections of movies for highlights"""
+    __tablename__ = 'clip'
+    id_ = sql.Column('id', sql.Integer, primary_key=True)
+    file_id = sql.Column(sql.Integer, sql.ForeignKey('movie.file_id'))
+    start = sql.Column(sql.Float)
+    duration = sql.Column(sql.Float)
+
+    moviefile = orm.relationship('MovieFile', backref=orm.backref('clips'))
+    tags = orm.relationship(
+        'Tag', secondary=clip_tag_association, backref=orm.backref('clips'))
+
+
+class Flag(Base):
+    """flag a location in a movie - probably because its good"""
+    __tablename__ = 'flag'
+    id_ = sql.Column('id', sql.Integer, primary_key=True)
+    file_id = sql.Column(sql.Integer, sql.ForeignKey('movie.file_id'))
+    location = sql.Column(sql.Float)
+    moviefile = orm.relationship('MovieFile', backref=orm.backref('flags'))
 
 
 Usage = sql.Table(

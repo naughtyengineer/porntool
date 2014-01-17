@@ -46,6 +46,31 @@ def getMovie(file_path):
     mf.paths.append(fp)
     return fp
 
+
+def addFile(abspath, filepath_list):
+    if os.path.isdir(abspath):
+        for file_ in os.listdir(abspath):
+            if file_[0] == '.':
+                continue
+            addFile(os.path.join(abspath, file_), filepath_list)
+    filepath = getMovie(abspath)
+    if filepath:
+        filepath_list.append(filepath)
+
+
+def loadFiles(files):
+    if not files:
+        return db.getSession().query(tables.FilePath).join(tables.MovieFile).filter(
+            tables.FilePath.hostname==util.hostname).all()
+    else:
+        filepath_list = []
+        for file_ in files:
+            logging.debug('Adding %s', file_)
+            abspath = os.path.abspath(file_)
+            addFile(abspath, filepath_list)
+        return filepath_list
+
+
 class MovieInventory(object):
     def __init__(self, filepaths, shuffle, extra_filters=None, basic_filters=None):
         # suggest putting the computationally cheapest filters first in the list

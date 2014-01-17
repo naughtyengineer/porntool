@@ -4,6 +4,8 @@ import os.path
 import platform
 import sys
 
+from porntool import db
+
 logger = logging.getLogger(__name__)
 
 hostname = platform.node()
@@ -31,9 +33,16 @@ def standardConsoleHandler():
     result.setFormatter(formatter)
     return result
 
-def configureLogging(level=logging.INFO, handlers=None):
+def standardFileHandler(filename):
+    result = logging.FileHandler(filename)
+    format_ = "%(asctime)s %(levelname)-8s %(name)s: %(message)s"
+    formatter = logging.Formatter(format_)
+    result.setFormatter(formatter)
+    return result
+
+def configureLogging(level=logging.DEBUG, handlers=None):
     if not handlers:
-        handlers = [standardConsoleHandler()]
+        handlers = [standardFileHandler('log')]
     for handler in handlers:
         logging.getLogger().addHandler(handler)
     logging.getLogger().setLevel(level)

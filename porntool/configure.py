@@ -1,15 +1,15 @@
+import logging
 import os.path
+
+logger = logging.getLogger(__name__)
 
 CONFIGURATION = {}
 
 def load(conf_file='~/.porntool/config.py'):
-    global CONFIGURATION
     conf = {}
-    exec(open(os.path.expanduser('~/.porntool/config.py')).read(), {}, conf)
-    CONFIGURATION = conf
-    print "SETTING", CONFIGURATION
+    exec(open(os.path.expanduser(conf_file)).read(), {}, conf)
+    CONFIGURATION.update(conf)
     return conf
 
 def get(key):
-    print "getting", CONFIGURATION
     return CONFIGURATION.get(key)

@@ -1,20 +1,15 @@
 import argparse
 import logging
-import os.path
-import subprocess
 
-import sqlalchemy as sql
-from sqlalchemy import orm
+import urwid
 
 import porntool as pt
+from porntool import controller
 from porntool import db
 from porntool import movie
-from porntool import tables
-from porntool import util
-from porntool import configure
 from porntool import player
-
-conf = configure.load()
+from porntool import reviewer
+from porntool import script
 
 def flexibleBoolean(x):
     x = x.lower()
@@ -29,40 +24,66 @@ parser.add_argument('files', nargs='*', help='files to play; play entire collect
 parser.add_argument('--shuffle', default=True, type=flexibleBoolean)
 args = parser.parse_args()
 
-def addFile(abspath, filepath_list):
-    if os.path.isdir(abspath):
-        for file_ in os.listdir(abspath):
-            if file_[0] == '.':
-                continue
-            addFile(os.path.join(abspath, file_), filepath_list)
-    filepath = movie.getMovie(abspath)
-    if filepath:
-        filepath_list.append(filepath)
+script.standardSetup()
 
-def loadFiles(files):
-    if not files:
-        return session.query(tables.FilePath).join(tables.MovieFile).filter(
-            tables.FilePath.hostname==util.hostname).all()
-    else:
-        filepath_list = []
-        for file_ in files:
-            logging.debug('Adding %s', file_)
-            abspath = os.path.abspath(file_)
-            addFile(abspath, filepath_list)
-        return filepath_list
-
-logging.getLogger().handlers=[]
-util.configureLogging()
-engine = sql.create_engine(conf.get('SQL'), echo=False)
-Session = orm.sessionmaker(bind=engine)
-session = Session()
-db.setSession(session)
-
-filepaths = loadFiles(args.files)
-session.commit()
+filepaths = movie.loadFiles(args.files)
+db.getSession().commit()
 
 inventory = movie.MovieInventory(filepaths, args.shuffle)
+iinventory = iter(inventory)
 
-for filepath in inventory:
-    player.MoviePlayer(filepath).play()
-    q = raw_input('Enter to continue: ')
+CONTROLLER = None
+
+def handleKey(key):
+    key = key.lower()
+    logging.debug("'%s' was pressed", key)
+    if CONTROLLER:
+        CONTROLLER.consume(key)
+
+def nextMovie(*args):
+    global CONTROLLER
+    db.getSession().commit()
+    try:
+        filepath = next(iinventory)
+        CONTROLLER = controller.FlagController(filepath, fill)
+        CONTROLLER.addFinishedHandler(nextMovie)
+        CONTROLLER.setLoop(loop)
+        CONTROLLER.start()
+    except StopIteration:
+        logging.debug('Exiting!')
+        raise urwid.ExitMainLoop()
+
+#filepath = next(iinventory)
+
+fill = reviewer.UrwidReviewWidget(valign='bottom')
+#scout = controller.ScoutController(filepath, fill)
+#scout.addFinishedHandler(exit)
+
+loop = urwid.MainLoop(fill, unhandled_input=handleKey)
+#scout.setLoop(loop)
+
+loop.set_alarm_in(1, nextMovie)
+loop.run()
+
+db.getSession().commit()
+
+# fill = reviewer.UrwidReviewWidget('bottom')
+# scout = controller.ScoutController(filepath, player, fill)
+
+# loop = urwid.MainLoop(fill, unhandled_input=show_or_exit)
+# player.setLoop(loop)
+# loop.set_alarm_in(1, scout.start)
+# loop.run()
+
+
+# for filepath in inventory:
+#     sp = player.SlavePlayer(filepath.play)
+
+#     q = raw_input('Enter to continue: ')
+
+#osascript -e 'tell application "Terminal"
+#    tell window 1
+#        set size to {1440, 190}
+#        set position to {0, 705}
+#    end tell
+#end tell'
