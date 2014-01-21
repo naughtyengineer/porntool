@@ -1,6 +1,8 @@
+import datetime as dt
 import logging
 
 import porntool as pt
+from porntool import tables
 
 logger = logging.getLogger(__name__)
 
@@ -17,3 +19,9 @@ def getSession():
     if not _session:
         raise pt.PorntoolException('No session set')
     return _session
+
+def saveUsage(movie, length, timestamp=None):
+    timestamp = timestamp or dt.datetime.now()
+    u = tables.Usage.insert().values(
+        file_id=movie.id_, timestamp=timestamp, time_=length)
+    getSession().execute(u)

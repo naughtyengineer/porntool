@@ -6,8 +6,10 @@ import urwid
 import porntool as pt
 from porntool import controller
 from porntool import db
+from porntool import menu
 from porntool import movie
 from porntool import player
+from porntool import rating
 from porntool import reviewer
 from porntool import script
 
@@ -32,6 +34,7 @@ db.getSession().commit()
 inventory = movie.MovieInventory(filepaths, args.shuffle)
 iinventory = iter(inventory)
 
+NORMALRATINGS = rating.NormalRatings(db.getSession())
 CONTROLLER = None
 
 def handleKey(key):
@@ -40,20 +43,38 @@ def handleKey(key):
     if CONTROLLER:
         CONTROLLER.consume(key)
 
-def nextMovie(*args):
-    global CONTROLLER
+def editMovie(filepath):
+    # first, save a usage instance
+    db.saveUsage(filepath.pornfile, CONTROLLER.player.playtime)
     db.getSession().commit()
+
+    main = menu.FileMenuPadding(filepath, NORMALRATINGS)
+    urwid.connect_signal(main, 'done', nextMovie)
+    loop.widget = urwid.Overlay(
+        main, urwid.SolidFill(), align='left', width=('relative', 90),
+        valign='bottom', height=('relative', 100), min_width=20, min_height=7)
+
+def nextMovie(fmp=None, *args):
+    global CONTROLLER
     try:
-        filepath = next(iinventory)
+        try:
+            if fmp.same_movie:
+                filepath = fmp.filepath
+            else:
+                filepath = next(iinventory)
+        except:
+            filepath = next(iinventory)
         CONTROLLER = controller.FlagController(filepath, fill)
-        CONTROLLER.addFinishedHandler(nextMovie)
+        CONTROLLER.addFinishedHandler(editMovie, filepath)
         CONTROLLER.setLoop(loop)
+        loop.widget = fill
         CONTROLLER.start()
     except StopIteration:
         logging.debug('Exiting!')
         raise urwid.ExitMainLoop()
+    finally:
+        db.getSession().commit()
 
-#filepath = next(iinventory)
 
 fill = reviewer.UrwidReviewWidget(valign='bottom')
 #scout = controller.ScoutController(filepath, fill)

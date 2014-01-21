@@ -46,3 +46,4 @@ def configureLogging(level=logging.DEBUG, handlers=None):
     for handler in handlers:
         logging.getLogger().addHandler(handler)
     logging.getLogger().setLevel(level)
+    logging.getLogger('urwid').setLevel('WARNING')

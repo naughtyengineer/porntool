@@ -1,4 +1,3 @@
-
 from porntool import db
 from porntool import tables
 

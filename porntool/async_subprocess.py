@@ -26,11 +26,15 @@ This is based on a code snippet by J. F. Sebastian, posted at StackOverflow
 at the following URL: http://stackoverflow.com/questions/375427/
 '''
 
+import logging
 from subprocess import PIPE, Popen
 from threading  import Thread, Lock
 from warnings import warn
+import Queue
 
 from collections import deque
+
+logger = logging.getLogger(__name__)
 
 class AsyncPopen(Popen):
     '''
@@ -104,7 +108,7 @@ class AsyncPopen(Popen):
             '''Lock used for stdout queue synchronization.'''
             self.stdout_thread = Thread(target=self._ThreadedOutputQueue,
                                         args=(self.stdout, self.stdout_queue,
-                                              self.stdout_lock))
+                                              self.stdout_lock, 'stdout'))
             '''Queue management thread for stdout.'''
             self.stdout_thread.daemon = True
             self.stdout_thread.start()
@@ -116,29 +120,31 @@ class AsyncPopen(Popen):
             '''Lock used for stderr queue synchronization.'''
             self.stderr_thread = Thread(target=self._ThreadedOutputQueue,
                                         args=(self.stderr, self.stderr_queue,
-                                              self.stderr_lock))
+                                              self.stderr_lock, 'stderr'))
             '''Queue management thread for stderr.'''
             self.stderr_thread.daemon = True
             self.stderr_thread.start()
         if _stdin == PIPE:
             self.use_stdin = True
-            self.stdin_queue = deque()
+            self.stdin_queue = Queue.Queue()
             '''Queue of data to write to stdin.'''
-            self.stdin_lock = Lock()
+            self.stdin_lock = None
             '''Lock used for stdin queue synchronization.'''
             self.stdin_thread = Thread(target=self._ThreadedInputQueue,
-                                        args=(self.stdin, self.stdin_queue,
-                                              self.stdin_lock))
+                                        args=(self.stdin, self.stdin_queue))
             '''Queue management thread for stdin.'''
             self.stdin_thread.daemon = True
             self.stdin_thread.start()
     
-    def _ThreadedOutputQueue(self, pipe, queue, lock):
+    def _ThreadedOutputQueue(self, pipe, queue, lock, name):
         '''
         Called from the thread to update an output (stdout, stderr) queue.
         '''
+        count = 0
         try:
             while True:
+                count += 1
+                logger.debug('ThreadedOutputQueue %s is looping: %s', name, count)
                 chunk = pipe.readline()
                 if not chunk:
                     # hit end-of-file
@@ -147,40 +153,44 @@ class AsyncPopen(Popen):
                 queue.append(chunk)
                 lock.release()
         except:
-            pass
+            logger.exception('Exception in ThreadedOutputQueue')
         finally:
             pipe.close()
-    
-    def _ThreadedInputQueue(self, pipe, queue, lock):
-        '''
+            logger.debug('ThreadedOutputQueue %s is ending: %s', name, count)
+
+    def _ThreadedInputQueue(self, pipe, queue):
+        """
         Called from the thread to update an input (stdin) queue.
-        '''
+        """
         try:
-            while True:
+            # poll() is necessary to end this thread when the process ends
+            while self.poll() is None:
                 try:
-                    lock.acquire()
-                    while len(queue) > 0:
-                        chunk = queue.popleft()
-                        pipe.write(chunk)
+                    # the timeout is necessary or else it might block for
+                    # perpituity. (unless I implement a KILL pill
+                    chunk = queue.get(True, 1)
+                    pipe.write(chunk)
+                except Queue.Empty:
+                    pass
                 finally:
-                    lock.release()
                     pipe.flush()
         except:
-            pass
+            logger.exception('Exception in ThreadedInputQueue')
         finally:
             pipe.close()
-    
-    def communicate(self, input=None):
+            logger.debug('ThreadedInputQueue is ending')
+
+    def communicate(self, input_=None):
         '''
         Interact with process: Enqueue data to be sent to stdin.  Return data
         read from stdout and stderr as a tuple (stdoutdata, stderrdata).  Do
         NOT wait for process to terminate.
         '''
-        if self.use_stdin and input:
-            self.stdin_lock.acquire()
-            self.stdin_queue.append(input)
-            self.stdin_lock.release()
-        
+        if self.use_stdin and input_:
+            #self.stdin_lock.acquire()
+            self.stdin_queue.put(input_)
+            #self.stdin_lock.release()
+
         stdoutdata = None
         stderrdata = None
         if self.use_stdout:

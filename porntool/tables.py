@@ -1,3 +1,5 @@
+import os.path
+
 import sqlalchemy as sql
 from sqlalchemy.ext import declarative
 from sqlalchemy import orm
@@ -63,6 +65,7 @@ class PictureFile(PornFile):
     }
 
 
+# TODO: add support for aliases
 class Girl(Base):
     __tablename__ = 'girl'
     id_ = sql.Column('id', sql.Integer, primary_key=True)
@@ -80,6 +83,9 @@ class FilePath(Base):
 
     def __repr__(self):
         return '{}({}, {})'.format(self.__class__.__name__, self.hostname, self.path)
+
+    def filename(self):
+        return os.path.basename(self.path)
 
 
 class Tag(Base):

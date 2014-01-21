@@ -8,6 +8,7 @@ from porntool import configure
 from porntool import widget
 
 logger = logging.getLogger(__name__)
+TRACE = logging.DEBUG - 1
 
 def parseTime(stdout):
     if stdout:
@@ -50,7 +51,7 @@ class SlavePlayer(widget.OnFinished, widget.LoopAware):
     SEEK_ABSOLUTE = 2
     DEFAULT_CMD =('{player} --slave --quiet '
                   '--input=nodefault-bindings --noconfig=all '
-                  '{extra} --geometry=1440x680+0+900')
+                  '{extra} --geometry=1440x640+0+900')
 
     def __init__(self, filename, cmd=None, extra='', *args, **kwds):
         """loop is an optional eventloop.  If specified, the Player will yield to the
@@ -61,12 +62,23 @@ class SlavePlayer(widget.OnFinished, widget.LoopAware):
         self.cmd = cmd.format(player=configure.get('MPLAYER'), extra=extra).split() + [filename]
         self.p = None
         self._paused = True
+        self.playtime = 0
+        self._starttime = None
+
+    def updatePlaytime(self):
+        if self._starttime:
+            self.playtime += time.time() - self._starttime
+            self._starttime = None
+            logger.debug('Movie playeed for %s seconds', self.playtime)
+        else:
+            self._starttime = time.time()
 
     def checkIfFinished(self, *args):
         if self.p.poll() is not None:
+            self.updatePlaytime()
             self.onFinished()
         else:
-            logger.debug('still playing')
+            logger.log(TRACE, 'still playing')
             if self._loop:
                 self._loop.set_alarm_in(1, self.checkIfFinished)
 
@@ -76,6 +88,7 @@ class SlavePlayer(widget.OnFinished, widget.LoopAware):
             self.p = async_subprocess.AsyncPopen(
                 self.cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE)
+            self.updatePlaytime()
             self._paused = False
             self.checkIfFinished()
 
@@ -131,6 +144,7 @@ class SlavePlayer(widget.OnFinished, widget.LoopAware):
         self.getTime(_callback)
 
     def togglePause(self):
+        self.updatePlaytime()
         self.communicate('pause')
         self._paused = not self._paused
         logger.debug('Paused: %s', self._paused)

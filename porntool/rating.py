@@ -19,9 +19,10 @@ def find_stddev(total, mean, target_tens):
         return target_tens - (total - not_tens)
     return optimize.bisect(root_function, 1, 5)
 
-def calculate_cutoffs(raw_rating_values, mean, target_tens):
+def calculate_cutoffs(raw_rating_values, mean, fraction_tens):
     raw_rating_values = np.array(raw_rating_values)
     total = len(raw_rating_values)
+    target_tens = total * fraction_tens
     stddev = find_stddev(total, mean, target_tens)
     # even though I don't have anything rated 0, its easier
     # for me to have the indices line up to the ratings (on the cuttoff array)
@@ -33,9 +34,9 @@ class NormalRatings(Ratings):
     """A rating system that creates a normal distribution of
     ratings between 1-10 for all movies in the collection"""
 
-    def __init__(self, session, target_tens=25, target_mean=5):
+    def __init__(self, session, fraction_tens=0.01, target_mean=5):
         self.session = session
-        self.target_tens = target_tens
+        self.fraction_tens = fraction_tens
         self.target_mean = target_mean
         self._load()
 
@@ -44,7 +45,7 @@ class NormalRatings(Ratings):
             [t.NormalRating.rating_adjustment,
              sql.func.sum(t.Usage.c.time_), sql.func.count('*')]
         ).select_from(
-            t.Usage.join(t.MovieFile).join(t.NormalRating)
+            t.Usage.join(t.MovieFile).outerjoin(t.NormalRating)
         ).where(
             sql.and_(
                 t.MovieFile.active == 1,
@@ -53,6 +54,8 @@ class NormalRatings(Ratings):
         return self.session.execute(query).fetchone()
 
     def _rawRating(self, adj, time, cnt):
+        if adj is None:
+            adj = 5
         return adj * time / cnt
 
     def _load(self):
@@ -60,7 +63,7 @@ class NormalRatings(Ratings):
             [t.MovieFile.id_, t.NormalRating.rating_adjustment,
              sql.func.sum(t.Usage.c.time_), sql.func.count('*')]
         ).select_from(
-            t.Usage.join(t.MovieFile).join(t.NormalRating)
+            t.Usage.join(t.MovieFile).outerjoin(t.NormalRating)
         ).where(
             t.MovieFile.active == 1
         ).group_by(
@@ -68,7 +71,7 @@ class NormalRatings(Ratings):
         )
         rows = self.session.execute(query).fetchall()
         raw_ratings = [self._rawRating(*r[1:]) for r in rows]
-        self.cutoffs = calculate_cutoffs(raw_ratings, self.target_mean, self.target_tens)
+        self.cutoffs = calculate_cutoffs(raw_ratings, self.target_mean, self.fraction_tens)
 
     def getRating(self, moviefile):
         row = self._rawRatingInfo(moviefile)
@@ -84,6 +87,8 @@ class NormalRatings(Ratings):
         need_value = (self.cutoffs[rating] + self.cutoffs[rating - 1]) / 2.0
         _, time_, playcount = self._rawRatingInfo(moviefile)
         new_adjustment = need_value / (time_ / playcount)
-        nr = self.session.query(t.NormalRating).filter_by(file_id=moviefile.id_).first()
-        nr.rating_adjustment = new_adjustment
-        self.session.commit()
+        nr = t.NormalRating(file_id=moviefile.id_, rating_adjustment=new_adjustment)
+        self.session.merge(nr)
+        #nr = self.session.query(t.NormalRating).filter_by(file_id=moviefile.id_).first()
+        #nr.rating_adjustment = new_adjustment
+        #self.session.commit()

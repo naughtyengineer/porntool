@@ -9,12 +9,13 @@ class OnFinished(object):
         self._on_finished = []
         super(OnFinished, self).__init__(*args, **kwds)
 
-    def addFinishedHandler(self, handler):
-        self._on_finished.append(handler)
+    def addFinishedHandler(self, handler, *args):
+        self._on_finished.append((handler, args))
 
-    def onFinished(self):
-        for onf in self._on_finished:
-            onf()
+    def onFinished(self, *args):
+        # the *args is necessary here because sometimes onFinished will cascade
+        for onf, args in self._on_finished:
+            onf(*args)
 
 class LoopAware(object):
     def __init__(self, *args, **kwds):
