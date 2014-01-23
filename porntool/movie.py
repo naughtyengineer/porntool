@@ -22,7 +22,6 @@ def getMovie(file_path):
     ext = os.path.splitext(file_path)[1]
     base = os.path.basename(file_path)
     if ext not in valid_mov_ext:
-        logger.debug('%s does not have a valid extension', file_path)
         return None
     session = db.getSession()
     # need to search to see if this path exists
@@ -42,6 +41,7 @@ def getMovie(file_path):
         logger.info('Adding a new file: %s', file_path)
         mf = tables.MovieFile(hash_=file_hash, active=1, size=os.path.getsize(file_path))
         session.add(mf)
+        session.commit()
     fp = tables.FilePath(path=file_path, hostname=util.hostname)
     mf.paths.append(fp)
     return fp
@@ -58,13 +58,14 @@ def addFile(abspath, filepath_list):
         filepath_list.append(filepath)
 
 
-def loadFiles(files):
+def loadFiles(files=None):
     if not files:
         return db.getSession().query(tables.FilePath).join(tables.MovieFile).filter(
             tables.FilePath.hostname==util.hostname).all()
     else:
         filepath_list = []
         for file_ in files:
+            file_ = file_.decode('utf-8')
             logging.debug('Adding %s', file_)
             abspath = os.path.abspath(file_)
             addFile(abspath, filepath_list)

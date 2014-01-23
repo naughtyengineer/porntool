@@ -34,7 +34,7 @@ class BaseController(widget.OnFinished, widget.LoopAware):
         super(BaseController, self).setLoop(loop)
 
     def start(self, *args):
-        self.widget.setStatus('Playing {}'.format(self.filepath.path))
+        self.widget.setStatus(u'Playing {}'.format(self.filepath.path))
         self.player.start()
 
     def consume(self, key):

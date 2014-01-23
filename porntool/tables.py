@@ -82,7 +82,8 @@ class FilePath(Base):
     path = sql.Column(sql.String, primary_key=True)
 
     def __repr__(self):
-        return '{}({}, {})'.format(self.__class__.__name__, self.hostname, self.path)
+        return '{}({}, {})'.format(
+            self.__class__.__name__, self.hostname, self.path.encode('utf-8'))
 
     def filename(self):
         return os.path.basename(self.path)
@@ -127,3 +128,9 @@ Usage = sql.Table(
     sql.Column('file_id', sql.Integer, sql.ForeignKey('file.id')),
     sql.Column('timestamp', sql.DateTime),
     sql.Column('time_', sql.Float))
+
+Scrub = sql.Table(
+    'scrub', Base.metadata,
+    sql.Column('file_id', sql.Integer, sql.ForeignKey('file.id')),
+    sql.Column('start', sql.Float),
+    sql.Column('end', sql.Float))

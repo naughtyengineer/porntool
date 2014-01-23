@@ -40,10 +40,10 @@ def standardFileHandler(filename):
     result.setFormatter(formatter)
     return result
 
-def configureLogging(level=logging.DEBUG, handlers=None):
-    if not handlers:
-        handlers = [standardFileHandler('log')]
-    for handler in handlers:
-        logging.getLogger().addHandler(handler)
+def configureLogging(level=logging.DEBUG, file_handler=True):
+    if file_handler:
+        logging.getLogger().addHandler(standardFileHandler('log'))
+    else:
+        logging.getLogger().addHandler(standardConsoleHandler())
     logging.getLogger().setLevel(level)
     logging.getLogger('urwid').setLevel('WARNING')
