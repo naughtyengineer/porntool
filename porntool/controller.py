@@ -1,5 +1,6 @@
 import logging
 
+from porntool import adjuster
 from porntool import db
 from porntool import player
 from porntool import reviewer
@@ -26,7 +27,7 @@ class BaseController(widget.OnFinished, widget.LoopAware):
         super(BaseController, self).__init__(filepath, *args, **kwds)
         self.filepath = filepath
         self.widget = status_widget
-        self.player = player.SlavePlayer(filepath.path)
+        self.player = player.SlavePlayer(filepath)
         self.player.addFinishedHandler(self.onFinished)
 
     def setLoop(self, loop):
@@ -105,3 +106,88 @@ class ScoutController(BaseController):
                 self.reviewer.activate()
             else:
                 super(ScoutController, self).consume(key)
+
+class AdjustController(BaseController):
+    def __init__(self, clip, status_widget, bold_palette_name='bold', *args, **kwds):
+        self.clip = clip
+        self.original = (clip.start, clip.duration)
+        self.bold_palette_name = bold_palette_name
+        filepath = clip.moviefile.getActivePath()
+        self.adjuster = None
+        self.side = None
+        super(AdjustController, self).__init__(filepath, status_widget, *args, **kwds)
+
+    def start(self, *args):
+        self.setStatus()
+        self.player.start()
+        self.player.pause()
+        self.player.seek(self.clip.start)
+
+    def consume(self, key):
+        logger.debug('%s recieved key: %s', self.__class__.__name__, key)
+        if key == ' ':
+            if self.player.isPaused():
+                self.player.seekAndPlay(self.clip.start, end=self.clip.end)
+            else:
+                self.player.pause()
+        elif key == 'r':
+            self.player.pause()
+            self.reset()
+        elif key == 's':
+            self.player.pause()
+            self.editStartBoundry()
+        elif key == 'e':
+            self.player.pause()
+            self.editEndBoundry()
+        elif self.adjuster:
+            if self.adjuster.consume(key):
+                self.adjustBoundry()
+            else:
+                return super(AdjustController, self).consume(key)
+        else:
+            return super(AdjustController, self).consume(key)
+        return True
+
+    def reset(self):
+        self.clip.start = self.original[0]
+        self.clip.duration = self.original[1]
+        self.player.seek(self.clip.start)
+        self.setStatus()
+
+    def adjustBoundry(self):
+        self.player.seek(self.adjuster.current_position)
+        if self.side == 'start':
+            self.clip.setStart(self.adjuster.current_position)
+            if self.clip.end <= self.adjuster.current_position:
+                self.clip.duration = 0.1
+        elif self.side == 'end':
+            if self.clip.start >= self.adjuster.current_position:
+                self.clip.start = self.adjuster.current_position - 0.1
+                self.clip.duration = 0.1
+            else:
+                self.clip.setEnd(self.adjuster.current_position)
+        self.setStatus()
+
+    def setStatus(self):
+        if self.adjuster:
+            if self.side == 'start':
+                status = ['Edit: ',
+                          (self.bold_palette_name, 'Start: {} '.format(self.clip.start)),
+                          'End: {}'.format(self.clip.end)]
+            elif self.side == 'end':
+                status = ['Edit: ',
+                          'Start: {} '.format(self.clip.start),
+                          (self.bold_palette_name, 'End: {}'.format(self.clip.end))]
+        else:
+            status = 'Start: {}, End: {}'.format(self.clip.start, self.clip.end)
+        self.widget.setStatus(status)
+
+    def editStartBoundry(self):
+        self.adjuster = adjuster.FineAdjuster(self.clip.start)
+        self.side = 'start'
+        self.setStatus()
+
+    def editEndBoundry(self):
+        self.adjuster = adjuster.FineAdjuster(self.clip.end)
+        self.side = 'end'
+        self.setStatus()

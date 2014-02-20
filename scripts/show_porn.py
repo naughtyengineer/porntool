@@ -6,6 +6,7 @@ import urwid
 import porntool as pt
 from porntool import controller
 from porntool import db
+from porntool import filters
 from porntool import menu
 from porntool import movie
 from porntool import player
@@ -24,6 +25,7 @@ def flexibleBoolean(x):
 parser = argparse.ArgumentParser(description='Play your porn collection')
 parser.add_argument('files', nargs='*', help='files to play; play entire collection if omitted')
 parser.add_argument('--shuffle', default=True, type=flexibleBoolean)
+parser.add_argument('--playcount', type=int)
 args = parser.parse_args()
 
 script.standardSetup()
@@ -31,7 +33,13 @@ script.standardSetup()
 filepaths = movie.loadFiles(args.files)
 db.getSession().commit()
 
-inventory = movie.MovieInventory(filepaths, args.shuffle)
+if args.playcount is not None:
+    count_filter = filters.ByCount(db.getSession(), args.playcount)
+else:
+    count_filter = None
+
+inventory = movie.MovieInventory(
+    filepaths, args.shuffle, [filters.exists, count_filter])
 iinventory = iter(inventory)
 
 NORMALRATINGS = rating.NormalRatings(db.getSession())
@@ -66,7 +74,7 @@ def nextMovie(fmp=None, *args):
             filepath = next(iinventory)
         CONTROLLER = controller.FlagController(filepath, fill)
         CONTROLLER.addFinishedHandler(editMovie, filepath)
-        CONTROLLER.setLoop(loop)
+        CONTROLLER.setLoop(loop.event_loop)
         loop.widget = fill
         CONTROLLER.start()
     except StopIteration:
@@ -81,6 +89,7 @@ fill = reviewer.UrwidReviewWidget(valign='bottom')
 #scout.addFinishedHandler(exit)
 
 loop = urwid.MainLoop(fill, unhandled_input=handleKey)
+
 #scout.setLoop(loop)
 
 loop.set_alarm_in(1, nextMovie)

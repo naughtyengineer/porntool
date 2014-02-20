@@ -42,10 +42,17 @@ class PornFile(Base):
         'polymorphic_on': _type
     }
 
+    def getActivePath(self):
+        for path in self.paths:
+            if os.path.exists(path.path):
+                return path
+
+
 class MovieFile(PornFile):
     __tablename__ = 'movie'
     id_ = sql.Column('file_id', sql.Integer, sql.ForeignKey('file.id'), primary_key=True)
     last = sql.Column(sql.DateTime)
+    length = sql.Column(sql.Float)
 
     girls = orm.relationship(
         'Girl', secondary=file_girl_association, backref=orm.backref('pornfiles'))
@@ -53,6 +60,12 @@ class MovieFile(PornFile):
     __mapper_args__ = {
         'polymorphic_identity':'movie',
     }
+
+    def getPlayCount(self, session):
+        query = sql.select([sql.func.count('*')]).select_from(Usage).where(
+            Usage.c.file_id == self.id_)
+        playcount = session.execute(query).fetchone()[0]
+        return playcount
 
 
 class PictureFile(PornFile):
@@ -108,11 +121,27 @@ class Clip(Base):
     file_id = sql.Column(sql.Integer, sql.ForeignKey('movie.file_id'))
     start = sql.Column(sql.Float)
     duration = sql.Column(sql.Float)
+    # 0 means not active
+    active = sql.Column(sql.Integer)
 
     moviefile = orm.relationship('MovieFile', backref=orm.backref('clips'))
     tags = orm.relationship(
         'Tag', secondary=clip_tag_association, backref=orm.backref('clips'))
 
+    @property
+    def end(self):
+        return self.start + self.duration
+
+    def setStart(self, value, hold='end'):
+        if hold == 'end':
+            self.duration = self.end - value
+        self.start = value
+
+    def setEnd(self, value, hold='start'):
+        if hold == 'start':
+            self.duration = value - self.start
+        else:
+            self.start = value - self.duration
 
 class Flag(Base):
     """flag a location in a movie - probably because its good"""
@@ -128,6 +157,7 @@ Usage = sql.Table(
     sql.Column('file_id', sql.Integer, sql.ForeignKey('file.id')),
     sql.Column('timestamp', sql.DateTime),
     sql.Column('time_', sql.Float))
+
 
 Scrub = sql.Table(
     'scrub', Base.metadata,

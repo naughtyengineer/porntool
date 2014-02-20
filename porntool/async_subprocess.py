@@ -60,7 +60,7 @@ class AsyncPopen(Popen):
         All of the arguments are the same as for subprocess.Popen with several
         exceptions:
             * stdin, stdout, and stderr can only be None or PIPE.
-        
+
         In Python 3, all data read from stdout and stderr will be treated as
         the "bytes" built-in type; it is up to the user to convert this type
         to the appropriate character type, if desired.
@@ -81,7 +81,7 @@ class AsyncPopen(Popen):
             _stderr = None
         else:
             _stderr = stderr
-        
+
         # Inherit base class behavior.
         super(AsyncPopen, self).__init__(args, bufsize=bufsize,
                                          executable=executable, stdin=_stdin,
@@ -92,7 +92,7 @@ class AsyncPopen(Popen):
                                          universal_newlines=universal_newlines,
                                          startupinfo=startupinfo,
                                          creationflags=creationflags)
-        
+
         # Start the I/O polling threads.
         self.use_stdout = False
         '''Flag to use stdout.'''
@@ -135,7 +135,7 @@ class AsyncPopen(Popen):
             '''Queue management thread for stdin.'''
             self.stdin_thread.daemon = True
             self.stdin_thread.start()
-    
+
     def _ThreadedOutputQueue(self, pipe, queue, lock, name):
         '''
         Called from the thread to update an output (stdout, stderr) queue.
@@ -144,7 +144,7 @@ class AsyncPopen(Popen):
         try:
             while True:
                 count += 1
-                logger.debug('ThreadedOutputQueue %s is looping: %s', name, count)
+                #logger.debug('ThreadedOutputQueue %s is looping: %s', name, count)
                 chunk = pipe.readline()
                 if not chunk:
                     # hit end-of-file
@@ -172,6 +172,8 @@ class AsyncPopen(Popen):
                     pipe.write(chunk)
                 except Queue.Empty:
                     pass
+                except IOError, e:
+                    logger.warning('Error while looping in Input Queue')
                 finally:
                     pipe.flush()
         except:

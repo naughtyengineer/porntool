@@ -5,6 +5,7 @@ import urwid
 from porntool import db
 from porntool import girl
 from porntool import tag
+from porntool import widget
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +38,7 @@ class Menu(urwid.ListBox):
         for button in buttons:
             body.append(urwid.AttrMap(button, None, focus_map='reversed'))
         self.buttons = buttons
-        super(Menu, self).__init__(urwid.SimpleFocusListWalker(body), *args, **kwds)
+        urwid.ListBox.__init__(self, urwid.SimpleFocusListWalker(body), *args, **kwds)
 
     def keypress(self, size, key):
         # this probably won't work if scrolling is involved
@@ -52,29 +53,123 @@ class Menu(urwid.ListBox):
     def setTitle(self, title):
         self.body[0].set_text(title)
 
+
 class FileEditor(urwid.ListBox):
     def __init__(self, title, question_box):
         body = [urwid.Text(title), urwid.Divider(), question_box]
         super(FileEditor, self).__init__(urwid.SimpleListWalker(body))
 
-class FileMenuPadding(urwid.Padding):
+
+class MenuPadding(urwid.Padding, widget.OnFinished, widget.LoopAware):
+    def __init__(self, title, buttons):
+        self.title = title
+        self.buttons = buttons
+        self.menu = Menu(self.title, self.buttons)
+        self.same_movie = False
+        urwid.Padding.__init__(self, w=self.menu, left=2, right=2)
+        widget.OnFinished.__init__(self)
+        widget.LoopAware.__init__(self)
+
+    def sameMovie(self, button):
+        self.same_movie = True
+        self.onFinished()
+
+    def nextFile(self, button):
+        self.onFinished()
+
+    def editTags(self, button):
+        tags = " ".join([t.tag for t in self.tagged.tags])
+        def done():
+            tag_text = edit.edit_text.split()
+            new_tags = [tag.getTag(t) for t in tag_text]
+            self.taggedtags = new_tags
+            self.tag_button.set_label('Tags: {}'.format(edit.edit_text))
+            self.toMain()
+        edit = QuestionBox(done, self.toMain, 'Edit tags: ', tags)
+        fe = FileEditor(self.title, edit)
+        self.original_widget = fe
+
+    def toMain(self, *args):
+        self.original_widget = self.menu
+
+    def exitProgram(self, button):
+        raise urwid.ExitMainLoop()
+
+    def quit(self, button):
+        response = urwid.Text(u'Are you sure you want to quit?')
+        yes = urwid.Button(u'Yes')
+        no = urwid.Button(u'No')
+        urwid.connect_signal(yes, 'click', self.exitProgram)
+        urwid.connect_signal(no, 'click', self.toMain)
+        self.original_widget = urwid.Padding(urwid.ListBox(urwid.SimpleFocusListWalker(
+            [response, urwid.AttrMap(yes, None, focus_map='reversed'),
+             urwid.AttrMap(no, None, focus_map='reversed')])))
+
+
+class TagEditor(MenuPadding):
+    def __init__(self, filepath):
+        title = u"ID: {}, {}".format(filepath.file_id, filepath.path)
+        self.tagged = filepath.pornfile
+        tags = " ".join([t.tag for t in self.tagged.tags])
+        self.tag_button = MenuButton('t', 'Tags: {}'.format(tags), self.editTags)
+        buttons = [self.tag_button,
+                   MenuButton('n', 'Next', self.nextFile),
+                   MenuButton('q', 'Quit', self.quit)]
+        super(TagEditor, self).__init__(title=title, buttons=buttons)
+
+
+class ClipMenuPadding(MenuPadding):
+    def __init__(self, clip, adjuster=None):
+        filepath = clip.moviefile.getActivePath()
+        total = sum(c.duration for c in filepath.pornfile.clips if c.active)
+        title = u"{}: {} sec ({} total)".format(filepath.path, clip.duration, total)
+        tags = " ".join([t.tag for t in clip.tags])
+        self.keep = True
+        self.skip = False
+        self.tagged = clip
+        self.clip = clip
+        self.adjuster = adjuster
+        self.tag_button = MenuButton('t', 'Tags: {}'.format(tags), self.editTags)
+        buttons = [self.tag_button,
+                   MenuButton('a', 'Adjust', self.adjust),
+                   MenuButton('d', 'Delete', self.delete),
+                   MenuButton('e', 'Replay', self.sameMovie),
+                   MenuButton('n', 'Next', self.nextFile),
+                   MenuButton('s', 'Skip Movie', self.skipMovie),
+                   MenuButton('q', 'Quit', self.quit)]
+        super(ClipMenuPadding, self).__init__(title=title, buttons=buttons)
+
+    def delete(self, button):
+        self.keep = False
+        self.nextFile(button)
+
+    def adjust(self, button):
+        if self.adjuster:
+            self.adjuster(self)
+
+    def skipMovie(self, button):
+        logger.debug('Skipping')
+        self.skip = True
+        self.nextFile(button)
+
+class FileMenuPadding(MenuPadding):
     def __init__(self, filepath, rating):
         self.filepath = filepath
         self.rating = rating
+        self.tagged = filepath.pornfile
         self.file_ = filepath.pornfile
-        self.title = filepath.filename()
-        self.same_movie = False
         tags = " ".join([t.tag for t in self.file_.tags])
         girls = " ".join([g.name for g in self.file_.girls])
         self._r = rating.getRating(filepath.pornfile)
-        self.buttons = [MenuButton('g', 'Girls: {}'.format(girls), self.editGirls),
-                        MenuButton('t', 'Tags: {}'.format(tags), self.editTags),
-                        MenuButton('r', 'Rating: {}'.format(self._r), self.changeRating),
-                        MenuButton('e', 'Replay', self.sameMovie),
-                        MenuButton('n', 'Next', self.nextFile),
-                        MenuButton('q', 'Quit', self.quit)]
-        self.menu = Menu(self.title, self.buttons)
-        urwid.Padding.__init__(self, self.menu, left=2, right=2)
+        self.tag_button = MenuButton('t', 'Tags: {}'.format(tags), self.editTags)
+        title = filepath.path
+        buttons = [MenuButton('g', 'Girls: {}'.format(girls), self.editGirls),
+                   self.tag_button,
+                   MenuButton('r', 'Rating: {}'.format(self._r), self.changeRating),
+                   MenuButton('e', 'Replay', self.sameMovie),
+                   MenuButton('n', 'Next', self.nextFile),
+                   MenuButton('q', 'Quit', self.quit)]
+        super(FileMenuPadding, self).__init__(title, buttons)
 
     def editGirls(self, button):
         def done():
@@ -87,29 +182,6 @@ class FileMenuPadding(urwid.Padding):
         edit = QuestionBox(done, self.toMain, 'Edit girls: ', girls)
         fe = FileEditor(self.title, edit)
         self.original_widget = fe
-
-    def sameMovie(self, button):
-        self.same_movie = True
-        urwid.emit_signal(self, 'done', self)
-
-    def nextFile(self, button):
-        urwid.emit_signal(self, 'done', self)
-
-    def editTags(self, button):
-        tags = " ".join([t.tag for t in self.file_.tags])
-        def done():
-            tag_text = edit.edit_text.split()
-            new_tags = [tag.getTag(t) for t in tag_text]
-            self.file_.tags = new_tags
-            self.buttons[1].set_label('Tags: {}'.format(edit.edit_text))
-            self.toMain()
-        edit = QuestionBox(done, self.toMain, 'Edit tags: ', tags)
-        fe = FileEditor(self.title, edit)
-        self.original_widget = fe
-
-    def toMain(self, *args):
-        db.getSession().commit()
-        self.original_widget = self.menu
 
     def changeRating(self, button):
         def done():
@@ -126,19 +198,3 @@ class FileMenuPadding(urwid.Padding):
         edit = QuestionBox(done, self.toMain, 'New Rating: ', str(self._r))
         fe = FileEditor(self.title, edit)
         self.original_widget = fe
-
-    def exitProgram(self, button):
-        db.getSession().commit()
-        raise urwid.ExitMainLoop()
-
-    def quit(self, button):
-        response = urwid.Text(u'Are you sure you want to quit?')
-        yes = urwid.Button(u'Yes')
-        no = urwid.Button(u'No')
-        urwid.connect_signal(yes, 'click', self.exitProgram)
-        urwid.connect_signal(no, 'click', self.toMain)
-        self.original_widget = urwid.Padding(urwid.ListBox(urwid.SimpleFocusListWalker(
-            [response, urwid.AttrMap(yes, None, focus_map='reversed'),
-             urwid.AttrMap(no, None, focus_map='reversed')])))
-
-urwid.register_signal(FileMenuPadding, ['done'])

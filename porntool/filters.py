@@ -1,6 +1,13 @@
 import datetime
+import logging
 import random
 import os.path
+
+import sqlalchemy as sql
+
+from porntool import tables as t
+
+logger = logging.getLogger(__name__)
 
 def _play_recentrating(count, rating, last):
     if last is None:
@@ -31,3 +38,18 @@ def ratingrecent(filepath):
 
 def exists(filepath):
     return os.path.exists(filepath.path)
+
+class ExcludeTags(object):
+    def __init__(self, tags):
+        self.tags = set(tags)
+
+    def __call__(self, filepath):
+        return len(set([t.tag for t in filepath.pornfile.tags]) & self.tags) == 0
+
+class ByCount(object):
+    def __init__(self, session, count):
+        self.session = session
+        self.count = count
+
+    def __call__(self, filepath):
+        return filepath.pornfile.getPlayCount(self.session) <= self.count

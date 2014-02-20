@@ -8,6 +8,9 @@ logger = logging.getLogger(__name__)
 
 _session = None
 
+def urlFromFile(file_name):
+    return 'sqlite:///{}'.format(file_name)
+
 def setSession(session):
     global _session
     logger.info('Setting the session')

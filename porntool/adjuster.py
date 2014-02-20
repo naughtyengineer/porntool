@@ -9,9 +9,9 @@ class AdjusterSubController(object):
         self.current_position = current_position
 
     def consume(self, key):
-        logger.debug('Adjusting with key: %s', key)
         delta = self._keymap.get(key)
         if delta:
+            logger.debug('Adjusting %s with key: %s', delta, key)
             self.updatePosition(delta)
             return True
         else:
@@ -25,8 +25,10 @@ class FineAdjuster(AdjusterSubController):
     _keymap = {
             ','    :  -0.1,
             'left' :  -1.0,
+            'down' :  -5.0,
             '<'    : -10.0,
             '.'    :   0.1,
             'right':   1.0,
+            'up'   :   5.0,
             '>'    :  10.0,
         }

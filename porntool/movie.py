@@ -8,12 +8,20 @@ from porntool import db
 from porntool import tables
 from porntool import util
 from porntool import filters
+from porntool import player
 
 
 logger = logging.getLogger(__name__)
 
 valid_mov_ext = [".avi", ".mpg", ".wmv", ".flv", ".mov", ".mp4",
                  ".vob", ".divx", ".mkv", ".m4v", ".mpeg"]
+
+def updateMissingProperties(file_path):
+    moviefile = file_path.pornfile
+    if moviefile.length is None:
+        mp = player.MoviePlayer(file_path.path)
+        mp.identify()
+        moviefile.length = mp.length
 
 def getMovie(file_path):
     if not os.path.exists(file_path):
@@ -41,7 +49,8 @@ def getMovie(file_path):
         logger.info('Adding a new file: %s', file_path)
         mf = tables.MovieFile(hash_=file_hash, active=1, size=os.path.getsize(file_path))
         session.add(mf)
-        session.commit()
+        # a RARE commit outside of the main script
+        # session.commit()
     fp = tables.FilePath(path=file_path, hostname=util.hostname)
     mf.paths.append(fp)
     return fp
@@ -73,6 +82,9 @@ def loadFiles(files=None):
 
 
 class MovieInventory(object):
+    """Provides an iterator over filepaths that meet the given filters and
+    ordering/shuffle.
+    """
     def __init__(self, filepaths, shuffle, extra_filters=None, basic_filters=None):
         # suggest putting the computationally cheapest filters first in the list
         self.filepaths = filepaths
@@ -82,6 +94,7 @@ class MovieInventory(object):
         self.filters = basic_filters + (extra_filters if extra_filters else [])
 
     def __iter__(self):
+        self.current_movie = 0
         return self
 
     def next(self):
@@ -103,7 +116,7 @@ class MovieInventory(object):
 
             passes_filters = True
             for filt in self.filters:
-                if not filt(file_):
+                if filt and not filt(file_):
                     passes_filters = False
                     break
             if passes_filters:
