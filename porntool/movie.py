@@ -23,7 +23,7 @@ def updateMissingProperties(file_path):
         mp.identify()
         moviefile.length = mp.length
 
-def getMovie(file_path):
+def getMovie(file_path, allow_add):
     if not os.path.exists(file_path):
         logger.debug('%s does not exist', file_path)
         return None
@@ -39,6 +39,9 @@ def getMovie(file_path):
         return fp
     except sql.NoResultFound:
         pass
+
+    if not allow_add:
+        return None
 
     # 2 << 17 = 256kb = 1/4 mb
     # so hashing requires reading a meg of the data
@@ -56,18 +59,18 @@ def getMovie(file_path):
     return fp
 
 
-def addFile(abspath, filepath_list):
+def addFile(abspath, filepath_list, allow_add):
     if os.path.isdir(abspath):
         for file_ in os.listdir(abspath):
             if file_[0] == '.':
                 continue
-            addFile(os.path.join(abspath, file_), filepath_list)
-    filepath = getMovie(abspath)
+            addFile(os.path.join(abspath, file_), filepath_list, allow_add)
+    filepath = getMovie(abspath, allow_add)
     if filepath:
         filepath_list.append(filepath)
 
 
-def loadFiles(files=None):
+def loadFiles(files=None, allow_add=True):
     if not files:
         return db.getSession().query(tables.FilePath).join(tables.MovieFile).filter(
             tables.FilePath.hostname==util.hostname).all()
@@ -77,7 +80,7 @@ def loadFiles(files=None):
             file_ = file_.decode('utf-8')
             logging.debug('Adding %s', file_)
             abspath = os.path.abspath(file_)
-            addFile(abspath, filepath_list)
+            addFile(abspath, filepath_list, allow_add)
         return filepath_list
 
 
