@@ -23,54 +23,55 @@ def updateMissingProperties(file_path):
         mp.identify()
         moviefile.length = mp.length
 
-def getMovie(file_path, allow_add):
-    if not os.path.exists(file_path):
-        logger.debug('%s does not exist', file_path)
+def addMovie(filename):
+   # 2 << 17 = 256kb = 1/4 mb
+    # so hashing requires reading a meg of the data
+    file_hash = util.hash_file(filename, 2<<17)
+    session = db.getSession()
+    try:
+        mf = session.query(tables.MovieFile).filter(tables.MovieFile.hash_==file_hash).one()
+    except sql.NoResultFound:
+        logger.info('Adding a new file: %s', filename)
+        mf = tables.MovieFile(hash_=file_hash, active=1, size=os.path.getsize(filename))
+        session.add(mf)
+    fp = tables.FilePath(path=filename, hostname=util.hostname)
+    mf.paths.append(fp)
+
+def getMovie(filename, add_movie=None):
+    if not os.path.exists(filename):
+        logger.debug('%s does not exist', filename)
         return None
-    ext = os.path.splitext(file_path)[1]
-    base = os.path.basename(file_path)
+    ext = os.path.splitext(filename)[1]
+    base = os.path.basename(filename)
     if ext not in valid_mov_ext:
         return None
     session = db.getSession()
     # need to search to see if this path exists
     try:
         fp = session.query(tables.FilePath).filter(
-            tables.FilePath.path==file_path, tables.FilePath.hostname==util.hostname).one()
+            tables.FilePath.path==filename, tables.FilePath.hostname==util.hostname).one()
         return fp
     except sql.NoResultFound:
-        pass
+        logger.debug('No filepath found for %s:%s', util.hostname, filename)
 
-    if not allow_add:
+    if not add_movie:
         return None
-
-    # 2 << 17 = 256kb = 1/4 mb
-    # so hashing requires reading a meg of the data
-    file_hash = util.hash_file(file_path, 2<<17)
-    try:
-        mf = session.query(tables.MovieFile).filter(tables.MovieFile.hash_==file_hash).one()
-    except sql.NoResultFound:
-        logger.info('Adding a new file: %s', file_path)
-        mf = tables.MovieFile(hash_=file_hash, active=1, size=os.path.getsize(file_path))
-        session.add(mf)
-        # a RARE commit outside of the main script
-        # session.commit()
-    fp = tables.FilePath(path=file_path, hostname=util.hostname)
-    mf.paths.append(fp)
+    fp = add_movie(filename)
     return fp
 
 
-def addFile(abspath, filepath_list, allow_add):
+def checkAndAddFile(abspath, filepath_list, add_movie):
     if os.path.isdir(abspath):
         for file_ in os.listdir(abspath):
             if file_[0] == '.':
                 continue
-            addFile(os.path.join(abspath, file_), filepath_list, allow_add)
-    filepath = getMovie(abspath, allow_add)
+            checkAndAddFile(os.path.join(abspath, file_), filepath_list, add_movie)
+    filepath = getMovie(abspath, add_movie)
     if filepath:
         filepath_list.append(filepath)
 
 
-def loadFiles(files=None, allow_add=True):
+def loadFiles(files=None, add_movie=None):
     if not files:
         return db.getSession().query(tables.FilePath).join(tables.MovieFile).filter(
             tables.FilePath.hostname==util.hostname).all()
@@ -80,7 +81,7 @@ def loadFiles(files=None, allow_add=True):
             file_ = file_.decode('utf-8')
             logging.debug('Adding %s', file_)
             abspath = os.path.abspath(file_)
-            addFile(abspath, filepath_list, allow_add)
+            checkAndAddFile(abspath, filepath_list, add_movie)
         return filepath_list
 
 

@@ -9,6 +9,9 @@ from porntool import db
 logger = logging.getLogger(__name__)
 
 hostname = platform.node()
+_dot = hostname.find('.')
+if _dot > 0:
+    hostname = hostname[:_dot]
 
 def hash_file(file_, sample_size, enable_warn=True):
     logger.info("Hashing %s", file_)

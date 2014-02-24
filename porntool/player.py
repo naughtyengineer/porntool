@@ -1,5 +1,6 @@
 import collections as cols
 import logging
+import os
 import re
 import subprocess
 import time
@@ -12,7 +13,7 @@ from porntool import widget
 
 logger = logging.getLogger(__name__)
 TRACE = logging.DEBUG - 1
-
+DEVNULL = open(os.devnull, 'w')
 
 class MoviePlayer(object):
     def __init__(self, filename):
@@ -22,9 +23,10 @@ class MoviePlayer(object):
         p = subprocess.Popen(
             [configure.get('MPLAYER'), "--vo=null", "--ao=null", "--identify",
              "--frames=0", self.filename],
-            stdout=subprocess.PIPE)
+            stdout=subprocess.PIPE, stderr=DEVNULL)
         (out, err) = p.communicate()
 
+        
         video_height_m = re.search("ID_VIDEO_HEIGHT=(\d*)", out)
         video_width_m = re.search("ID_VIDEO_WIDTH=(\d*)", out)
         self.height = float(video_height_m.groups()[0])
