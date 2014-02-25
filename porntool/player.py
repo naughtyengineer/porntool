@@ -26,7 +26,6 @@ class MoviePlayer(object):
             stdout=subprocess.PIPE, stderr=DEVNULL)
         (out, err) = p.communicate()
 
-        
         video_height_m = re.search("ID_VIDEO_HEIGHT=(\d*)", out)
         video_width_m = re.search("ID_VIDEO_WIDTH=(\d*)", out)
         self.height = float(video_height_m.groups()[0])
@@ -36,6 +35,13 @@ class MoviePlayer(object):
         self.seekable = True if seekable.groups()[0] == '1' else False
 
         self.length = float(re.search("ID_LENGTH=([\d\.]*)", out).groups()[0])
+
+        for line in out.split('\n'):
+            m = re.search("ID_(\w)=([^\s]+)", line)
+            if m:
+                setattr(self, m.group(1).lower(), m.group(2))
+
+
 
     def start(self, *args):
         cmd = "{} --really-quiet".format(configure.get('MPLAYER')).strip().split()
@@ -216,7 +222,9 @@ class SlavePlayer(widget.OnFinished, widget.LoopAware):
         self.play()
         def _callback():
             t = self.getTime()
-            if t >= end or self._finished:
+            if self._finished:
+                return
+            elif t >= end:
                 self.pause()
                 logger.debug('Finished playing')
                 if onFinished:

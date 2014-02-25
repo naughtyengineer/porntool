@@ -9,6 +9,7 @@
 import argparse
 import itertools as it
 import logging
+import os.path
 import random
 
 import sqlalchemy as sql
@@ -36,15 +37,6 @@ def flexibleBoolean(x):
         return False
     raise pt.PorntoolException('Invalid boolean argument')
 
-parser = argparse.ArgumentParser(description='Play your porn collection')
-parser.add_argument('files', nargs='*', help='files to play; play entire collection if omitted')
-parser.add_argument('--shuffle', default=True, type=flexibleBoolean)
-args = parser.parse_args()
-
-script.standardSetup()
-
-filepaths = movie.loadFiles(args.files)
-db.getSession().commit()
 
 def isNotNewFilter():
     new_filter = filters.ByCount(db.getSession(), 0)
@@ -52,26 +44,30 @@ def isNotNewFilter():
         return not new_filter(x)
     return notNew
 
-inventory = movie.MovieInventory(
-    filepaths, args.shuffle,
-    [filters.exists, isNotNewFilter(), filters.ExcludeTags(['pmv', 'cock.hero'])])
+
+def is1080(filepath):
+    mp = player.MoviePlayer(filepath.path)
+    mp.identify()
+    return mp.height > 720 or mp.width > 1280
+
 
 def inventory_filter(inventory):
     # a function for filters specific to this script
     # that aren't worth adding to filter module
-    for i in inventory:
-        if sum(c.duration for c in i.pornfile.clips if c.active) < 180:
-            # a bit of a hack, sorry
-            movie.updateMissingProperties(i)
-            yield i
-        else:
-            logging.debug('Skipping %s because we have enough clips', i)
+    for fp in inventory:
+        if os.path.splitext(fp.path)[1] != '.mp4':
+            logging.debug('Skipping %s: not an mp4 file', fp)
+            continue
+        if is1080(fp):
+            logging.debug('Skipping %s:  too high def', fp)
+            continue
+        if sum(c.duration for c in fp.pornfile.clips if c.active) > 180:
+            logging.debug('Skipping %s because we have enough clips', fp)
+            continue
+        # a bit of a hack, sorry
+        movie.updateMissingProperties(fp)
+        yield fp
 
-iinventory = inventory_filter(inventory)
-
-
-NORMALRATINGS = rating.NormalRatings(db.getSession())
-CONTROLLER = None
 
 def handleKey(key):
     key = key.lower()
@@ -86,13 +82,14 @@ def adjustClip(clip_menu):
     LOOP.widget = FILL
     CONTROLLER = controller.AdjustController(clip, FILL)
     CONTROLLER.setLoop(LOOP.event_loop)
-    CONTROLLER.addFinishedHandler(editClip, clip)
+    CONTROLLER.addFinishedHandler(editClip, clip=clip)
     CONTROLLER.start()
     CONTROLLER.player.communicate('volume 10 1')
 
 def editClip(clip):
     main = menu.ClipMenuPadding(clip, adjustClip)
-    urwid.connect_signal(main, 'done', next_clip.playNextClip)
+    main.setLoop(LOOP.event_loop)
+    main.addFinishedHandler(next_clip.playNextClip, fmp=main)
     LOOP.widget = urwid.Overlay(
         main, urwid.SolidFill(), align='left', width=('relative', 90),
         valign='bottom', height=('relative', 100), min_width=20, min_height=7)
@@ -111,49 +108,109 @@ class SegmentTracker(object):
         return random.choice([2, 2, 2, 2, 3, 3, 3, 4, 4, 5, 6, 7, 8])
 
     def checkedDuration(self):
-        return sum(c.duration for c in self.filepath.pornfile.clips)
+        dur = sum(c.duration for c in self.filepath.pornfile.clips)
+        logging.debug("Duration for %s: %s", self, dur)
+        return dur
+
+    def addRow(self, sorted_rows, start, end):
+        if not sorted_rows:
+            sorted_rows.append((start, end))
+            return
+        previous_row = (0, 0)
+        for row in sorted_rows:
+            if start < row[0]:
+                break
+            previous_row = row
+        if start >= previous_row[1]:
+            # either the candidate fits in the gap
+            # or its after all the existing rows
+            if end <= row[0] or previous_row == row:
+                sorted_rows.append((start, end))
+                sorted_rows.sort()
+
+    def traverseGaps(self, rows, duration, movie_end):
+        if not rows:
+            return duration, movie_end - duration
+        gaps = 0
+        last_end = 0
+        for start, end in rows:
+            gap = start - last_end
+            if gaps <= duration and gaps + gap > duration:
+                # the target location is in this gap!
+                break
+            gaps += gap
+            last_end = end
+        location = last_end + (duration - gaps)
+        if start > location:
+            remaining = start - location
+        else:
+            remaining = movie_end - location
+        return location, remaining
 
     def getRows(self):
+        logging.debug('Getting Rows for %s', self)
+        # a better way would be to first get the flags and make some
+        # potential clips around each one
+        # and then get the scrub data
+        # and then add in random potential clips from the empty space
+        # to fill the target (either a total length or a fraction of
+        # the movie)
+        rows = []
         pornfile = self.filepath.pornfile
+        # get the flags
+        flags = db.getSession().query(t.Flag).filter(
+            t.Flag.file_id==pornfile.id_).all()
+        # with a flag, we want to do +/- 5 around it, split randomlyish
+        for flag in flags:
+            start = flag.location - 5
+            while start < flag.location + 5:
+                end = start + self.length()
+                self.addRow(rows, start, end)
+                start = end
+        # get the scrubs
         query = sql.select(
             [t.Scrub.c.start, t.Scrub.c.end]
         ).select_from(
             t.Scrub
         ).where(
             t.Scrub.c.file_id == pornfile.id_)
-        rows = sorted([(s, e) for s,e in db.getSession().execute(query).fetchall()])
-        new_rows = []
-        if not rows:
-            # no scrub info exists - randomly pick 20% of the movie
-            potential_clip_length = 0.0
-            while potential_clip_length / pornfile.length < .2:
-                start = round(random.random() * pornfile.length, 1)
-                end = min(start + self.length(), pornfile.length)
-                potential_clip_length += end - start
-                new_rows.append((start, end))
-        else:
-            last_end = 0
-            for start, end in rows:
-                # deal with overlap
-                if end < last_end:
-                    continue
-                if start < last_end:
-                    start = last_end
-                last_end = end
-                while True:
-                    clip_length = end - start
-                    # ignore the short stuff
-                    if end - start < 1:
-                        break
-                    target_length = self.length()
-                    if clip_length > target_length:
-                        new_rows.append((start, start + target_length))
-                        # skip ahead some bit to make it interesting
-                        start = start + target_length + random.randint(10, 20)
-                    else:
-                        new_rows.append((start, end))
-                        break
-        return new_rows
+        scrubs = sorted([(s, e) for s,e in db.getSession().execute(query).fetchall()])
+        last_end = 0
+        for start, end in rows:
+            # deal with overlap
+            if end < last_end:
+                continue
+            if start < last_end:
+                start = last_end
+            last_end = end
+            while True:
+                clip_length = end - start
+                # ignore the short stuff
+                if end - start < 1:
+                    break
+                target_length = self.length()
+                if clip_length > target_length:
+                    self.addRow(rows, start, start + target_length)
+                    # skip ahead some bit to make it interesting
+                    start = start + target_length + random.randint(10, 20)
+                else:
+                    self.addRow(rows, start, end)
+                    break
+        # fill in gaps to get to 20%:
+        duration = sum(e-s for s,e in rows)
+        while duration / pornfile.length < .2:
+            start = round(random.random() * (pornfile.length - duration), 1)
+            location, remaining = self.traverseGaps(rows, start, pornfile.length)
+            length = min(remaining, self.length())
+            if length < 1.5:
+                continue
+            end = location + length
+            # don't need to check this, know its in a gap
+            rows.append((location, end))
+            rows.sort()
+            duration += length
+        logging.debug('Done getting rows for %s', self)
+        return rows
 
     def _checkCandidate(self, start, end):
         overlap_found = False
@@ -197,14 +254,19 @@ class RandomSegmentTracker(SegmentTracker):
             yield self.rows.pop(i)
 
 class NextClip(object):
-    def __init__(self, iinventory, n=5):
+    def __init__(self, iinventory, n=20):
         self.iinventory = iinventory
-        self.trackers = [RandomSegmentTracker(fp) for fp in it.islice(iinventory, n)]
+        self.trackers = [self._newTracker() for _ in range(n)]
         self.current_tracker = None
 
     def _newTracker(self):
-        s = RandomSegmentTracker(next(iinventory))
+        fp = next(iinventory)
+        s = RandomSegmentTracker(fp)
         return s
+
+    def addTrackers(self, n=10):
+        for _ in range(n):
+            self.trackers.append(self._newTracker())
 
     def removeTracker(self, tracker):
         logging.debug('Removing tracker: %s', tracker)
@@ -259,6 +321,8 @@ class NextClip(object):
             if hasattr(fmp, 'skip') and fmp.skip:
                 db.getSession().delete(fmp.clip)
                 self.removeTracker(self.current_tracker)
+            if hasattr(fmp, 'add') and fmp.add:
+                self.addTrackers()
         try:
             same_movie = fmp and fmp.same_movie
         except:
@@ -270,17 +334,38 @@ class NextClip(object):
         self.setupController(clip)
 
 
-next_clip = NextClip(iinventory, n=40)
-logging.info('****** Starting new script ********')
-#FILL = reviewer.UrwidReviewWidget(valign='bottom')
-FILL = widget.Status(valign='bottom')
-
-# bold is needed for the AdjustController
-palette = [('bold', 'default,bold', 'default', 'bold'),]
-LOOP = urwid.MainLoop(FILL, palette=palette, unhandled_input=handleKey)
-
-LOOP.set_alarm_in(1, next_clip.playNextClip)
 try:
+    parser = argparse.ArgumentParser(description='Play your porn collection')
+    parser.add_argument('files', nargs='*', help='files to play; play entire collection if omitted')
+    parser.add_argument('--shuffle', default=True, type=flexibleBoolean)
+    args = parser.parse_args()
+
+    script.standardSetup()
+    logging.info('****** Starting new script ********')
+
+    filepaths = movie.loadFiles(args.files)
+    db.getSession().commit()
+
+    inventory = movie.MovieInventory(
+        filepaths, args.shuffle,
+        [filters.exists, isNotNewFilter(), filters.ExcludeTags(['pmv', 'cock.hero'])])
+
+    iinventory = inventory_filter(inventory)
+
+    NORMALRATINGS = rating.NormalRatings(db.getSession())
+    CONTROLLER = None
+
+    next_clip = NextClip(iinventory, 20)
+    #FILL = reviewer.UrwidReviewWidget(valign='bottom')
+    FILL = widget.Status(valign='bottom')
+
+    # bold is needed for the AdjustController
+    palette = [('bold', 'default,bold', 'default', 'bold'),]
+    LOOP = urwid.MainLoop(FILL, palette=palette, unhandled_input=handleKey)
+
+    LOOP.set_alarm_in(1, next_clip.playNextClip)
+
     LOOP.run()
 finally:
     script.standardCleanup()
+    logging.info('****** End of Script *********')

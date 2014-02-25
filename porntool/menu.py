@@ -82,7 +82,7 @@ class MenuPadding(urwid.Padding, widget.OnFinished, widget.LoopAware):
         def done():
             tag_text = edit.edit_text.split()
             new_tags = [tag.getTag(t) for t in tag_text]
-            self.taggedtags = new_tags
+            self.tagged.tags = new_tags
             self.tag_button.set_label('Tags: {}'.format(edit.edit_text))
             self.toMain()
         edit = QuestionBox(done, self.toMain, 'Edit tags: ', tags)
@@ -126,6 +126,7 @@ class ClipMenuPadding(MenuPadding):
         tags = " ".join([t.tag for t in clip.tags])
         self.keep = True
         self.skip = False
+        self.add = False
         self.tagged = clip
         self.clip = clip
         self.adjuster = adjuster
@@ -134,10 +135,15 @@ class ClipMenuPadding(MenuPadding):
                    MenuButton('a', 'Adjust', self.adjust),
                    MenuButton('d', 'Delete', self.delete),
                    MenuButton('e', 'Replay', self.sameMovie),
-                   MenuButton('n', 'Next', self.nextFile),
-                   MenuButton('s', 'Skip Movie', self.skipMovie),
+                   MenuButton('s', 'Save', self.nextFile),
+                   MenuButton('k', 'Skip Movie', self.skipMovie),
+                   MenuButton('m', 'Add Movies', self.addMovies),
                    MenuButton('q', 'Quit', self.quit)]
         super(ClipMenuPadding, self).__init__(title=title, buttons=buttons)
+
+    def addMovies(self, button):
+        self.add = True
+        self.nextFile(button)
 
     def delete(self, button):
         self.keep = False

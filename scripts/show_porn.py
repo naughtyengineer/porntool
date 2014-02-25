@@ -22,29 +22,6 @@ def flexibleBoolean(x):
         return False
     raise pt.PorntoolException('Invalid boolean argument')
 
-parser = argparse.ArgumentParser(description='Play your porn collection')
-parser.add_argument('files', nargs='*', help='files to play; play entire collection if omitted')
-parser.add_argument('--shuffle', default=True, type=flexibleBoolean)
-parser.add_argument('--playcount', type=int)
-args = parser.parse_args()
-
-script.standardSetup()
-
-filepaths = movie.loadFiles(args.files)
-db.getSession().commit()
-
-if args.playcount is not None:
-    count_filter = filters.ByCount(db.getSession(), args.playcount)
-else:
-    count_filter = None
-
-inventory = movie.MovieInventory(
-    filepaths, args.shuffle, [filters.exists, count_filter])
-iinventory = iter(inventory)
-
-NORMALRATINGS = rating.NormalRatings(db.getSession())
-CONTROLLER = None
-
 def handleKey(key):
     key = key.lower()
     logging.debug("'%s' was pressed", key)
@@ -57,7 +34,8 @@ def editMovie(filepath):
     db.getSession().commit()
 
     main = menu.FileMenuPadding(filepath, NORMALRATINGS)
-    urwid.connect_signal(main, 'done', nextMovie)
+    main.addFinishedHandler(nextMovie, fmp=main)
+    main.setLoop(loop.event_loop)
     loop.widget = urwid.Overlay(
         main, urwid.SolidFill(), align='left', width=('relative', 90),
         valign='bottom', height=('relative', 100), min_width=20, min_height=7)
@@ -73,7 +51,7 @@ def nextMovie(fmp=None, *args):
         except:
             filepath = next(iinventory)
         CONTROLLER = controller.FlagController(filepath, fill)
-        CONTROLLER.addFinishedHandler(editMovie, filepath)
+        CONTROLLER.addFinishedHandler(editMovie, filepath=filepath)
         CONTROLLER.setLoop(loop.event_loop)
         loop.widget = fill
         CONTROLLER.start()
@@ -83,37 +61,35 @@ def nextMovie(fmp=None, *args):
     finally:
         db.getSession().commit()
 
+parser = argparse.ArgumentParser(description='Play your porn collection')
+parser.add_argument('files', nargs='*', help='files to play; play entire collection if omitted')
+parser.add_argument('--shuffle', default=True, type=flexibleBoolean)
+parser.add_argument('--playcount', type=int)
+args = parser.parse_args()
 
-fill = reviewer.UrwidReviewWidget(valign='bottom')
-#scout = controller.ScoutController(filepath, fill)
-#scout.addFinishedHandler(exit)
+script.standardSetup()
 
-loop = urwid.MainLoop(fill, unhandled_input=handleKey)
+try:
+    filepaths = movie.loadFiles(args.files, add_movie=movie.addMovie)
+    db.getSession().commit()
 
-#scout.setLoop(loop)
+    if args.playcount is not None:
+        count_filter = filters.ByCount(db.getSession(), args.playcount)
+    else:
+        count_filter = None
 
-loop.set_alarm_in(1, nextMovie)
-loop.run()
+    inventory = movie.MovieInventory(
+        filepaths, args.shuffle, [filters.exists, count_filter])
+    iinventory = iter(inventory)
 
-db.getSession().commit()
+    NORMALRATINGS = rating.NormalRatings(db.getSession())
+    CONTROLLER = None
 
-# fill = reviewer.UrwidReviewWidget('bottom')
-# scout = controller.ScoutController(filepath, player, fill)
+    fill = reviewer.UrwidReviewWidget(valign='bottom')
+    loop = urwid.MainLoop(fill, unhandled_input=handleKey)
 
-# loop = urwid.MainLoop(fill, unhandled_input=show_or_exit)
-# player.setLoop(loop)
-# loop.set_alarm_in(1, scout.start)
-# loop.run()
-
-
-# for filepath in inventory:
-#     sp = player.SlavePlayer(filepath.play)
-
-#     q = raw_input('Enter to continue: ')
-
-#osascript -e 'tell application "Terminal"
-#    tell window 1
-#        set size to {1440, 190}
-#        set position to {0, 705}
-#    end tell
-#end tell'
+    loop.set_alarm_in(1, nextMovie)
+    loop.run()
+finally:
+    db.getSession().commit()
+    script.standardCleanup()
