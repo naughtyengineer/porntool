@@ -12,12 +12,14 @@ class OnFinished(object):
         self._on_finished.append((handler, kwds))
 
     def onFinished(self, **kwds):
-        # the *args is necessary here because sometimes onFinished will cascade
+        logger.debug('onFishished called for %s', self.__class__.__name__)
         for onf, new_kwds in self._on_finished:
             kwds.update(new_kwds)
             if hasattr(self, '_loop'):
+                logger.debug('Adding %s as an alarm', onf.__name__)
                 self._loop.alarm(0, lambda: onf(**kwds))
             else:
+                logger.debug('Calling %s', onf.__name__)
                 onf(**kwds)
 
 class LoopAware(object):

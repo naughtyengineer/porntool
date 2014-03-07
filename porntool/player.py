@@ -20,6 +20,7 @@ class MoviePlayer(object):
         self.filename = filename
 
     def identify(self):
+        logger.debug('Calling `identify` on %s', self.filename)
         p = subprocess.Popen(
             [configure.get('MPLAYER'), "--vo=null", "--ao=null", "--identify",
              "--frames=0", self.filename],
@@ -88,13 +89,10 @@ class SlavePlayer(widget.OnFinished, widget.LoopAware):
     DEFAULT_CMD =('{player} --slave --quiet '
                   '--input=nodefault-bindings --noconfig=all '
                   '{extra} --geometry=1440x640+0+900')
-# --msglevel=global=6
-# has a line like: EOF code: XXX
+    # --msglevel=global=6
+    # has a line like: EOF code: XXX
 
-    def __init__(self, filepath, cmd=None, extra='', *args, **kwds):
-        """loop is an optional eventloop.  If specified, the Player will yield to the
-        event loop"""
-        super(SlavePlayer, self).__init__(*args, **kwds)
+    def __init__(self, filepath, cmd=None, extra=''):
         filename = filepath.path
         self.filepath = filepath
         if not cmd:
@@ -111,6 +109,9 @@ class SlavePlayer(widget.OnFinished, widget.LoopAware):
         self._parsers = [IsFinishedParser(self.onFinished), TimePosParser(self._setPos)]
         self._scrub_start = 0
         self.save_scrub = True
+        widget.OnFinished.__init__(self)
+        widget.LoopAware.__init__(self)
+
 
     def saveScrub(self, end):
         if self.save_scrub and self._scrub_start is not None:
@@ -190,7 +191,8 @@ class SlavePlayer(widget.OnFinished, widget.LoopAware):
         # it also enables other possible status to come in
         # through stdout
         logger.debug('command: %s', cmd)
-        return self.p.communicate(cmd + '\n')
+        if hasattr(self, 'p'):
+            return self.p.communicate(cmd + '\n')
 
     def getProperty(self, prop, parser, callback=None):
         def _callback(*args):
@@ -223,10 +225,12 @@ class SlavePlayer(widget.OnFinished, widget.LoopAware):
         def _callback():
             t = self.getTime()
             if self._finished:
-                return
+                logger.debug('Finished playing')
+                if onFinished:
+                    onFinished()
             elif t >= end:
                 self.pause()
-                logger.debug('Finished playing')
+                logger.debug('Reached the end of our clip')
                 if onFinished:
                     onFinished()
             else:

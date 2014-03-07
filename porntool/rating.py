@@ -1,3 +1,6 @@
+from __future__ import division
+import logging
+
 import sqlalchemy as sql
 
 import numpy as np
@@ -6,6 +9,8 @@ from scipy import optimize
 
 from porntool import tables as t
 
+logger = logging.getLogger(__name__)
+
 class Ratings(object):
     def getRating(self, moviefile):
         pass
@@ -13,11 +18,13 @@ class Ratings(object):
     def setRating(self, moviefile, rating):
         pass
 
+
 def find_stddev(total, mean, target_tens):
     def root_function(stddev):
         not_tens = total * stats.norm.cdf(9, mean, stddev)
         return target_tens - (total - not_tens)
     return optimize.bisect(root_function, 1, 5)
+
 
 def calculate_cutoffs(raw_rating_values, mean, fraction_tens):
     raw_rating_values = np.array(raw_rating_values)
@@ -29,6 +36,7 @@ def calculate_cutoffs(raw_rating_values, mean, fraction_tens):
     indices = np.int16(np.concatenate(
         ([0], total * stats.norm.cdf(range(1, 10), mean, stddev), [-1])))
     return np.sort(raw_rating_values)[indices]
+
 
 class NormalRatings(Ratings):
     """A rating system that creates a normal distribution of
@@ -74,12 +82,16 @@ class NormalRatings(Ratings):
         self.cutoffs = calculate_cutoffs(raw_ratings, self.target_mean, self.fraction_tens)
 
     def getRating(self, moviefile):
-        row = self._rawRatingInfo(moviefile)
-        value = self._rawRating(*row)
-        for i, c in enumerate(self.cutoffs):
-            if value <= c:
-                return i
-        return i
+        try:
+            row = self._rawRatingInfo(moviefile)
+            value = self._rawRating(*row)
+            for i, c in enumerate(self.cutoffs):
+                if value <= c:
+                    return i
+            return i
+        except TypeError:
+            logger.exception('Error while trying to get rating for %s', moviefile)
+            return 5
 
     def setRating(self, moviefile, rating):
         # make adjustment to put the rating right in the middle of the

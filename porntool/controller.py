@@ -23,12 +23,13 @@ class BaseController(widget.OnFinished, widget.LoopAware):
         '>'    :  60,
     }
 
-    def __init__(self, filepath, status_widget, *args, **kwds):
-        super(BaseController, self).__init__(filepath, *args, **kwds)
+    def __init__(self, filepath, status_widget, **kwds):
         self.filepath = filepath
         self.widget = status_widget
-        self.player = player.SlavePlayer(filepath)
+        self.player = player.SlavePlayer(filepath, **kwds)
         self.player.addFinishedHandler(self.onFinished)
+        widget.OnFinished.__init__(self)
+        widget.LoopAware.__init__(self)
 
     def setLoop(self, loop):
         self.player.setLoop(loop)

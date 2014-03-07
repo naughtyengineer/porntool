@@ -1,12 +1,5 @@
-# The replay approach seems flawed.  I'd prefer to have a clip review
-# mode where maybe, in a similar fashion as this script - clips are
-# choosen from five files, but instead of playing continuously there
-# is a dialog after each one asking to keep or save, along with the
-# ability to add tags (like position) which would get persisted to a
-# clip tag and a clip_tag table (there is already a Clip object in the
-# schema - use it)
-
 import argparse
+import collections as cols
 import itertools as it
 import logging
 import os.path
@@ -28,6 +21,7 @@ from porntool import script
 from porntool import tables as t
 from porntool import widget
 
+PotentialClip = cols.namedtuple('PotentialClip', ['start', 'end', 'priority'])
 
 def flexibleBoolean(x):
     x = x.lower()
@@ -55,6 +49,9 @@ def inventory_filter(inventory):
     # a function for filters specific to this script
     # that aren't worth adding to filter module
     for fp in inventory:
+        if fp.path.find('empornium') >= 0:
+            continue
+        logging.debug('Checking %s', fp)
         if os.path.splitext(fp.path)[1] != '.mp4':
             logging.debug('Skipping %s: not an mp4 file', fp)
             continue
@@ -87,6 +84,7 @@ def adjustClip(clip_menu):
     CONTROLLER.player.communicate('volume 10 1')
 
 def editClip(clip):
+    logging.debug('Starting editClip')
     main = menu.ClipMenuPadding(clip, adjustClip)
     main.setLoop(LOOP.event_loop)
     main.addFinishedHandler(next_clip.playNextClip, fmp=main)
@@ -99,7 +97,8 @@ class SegmentTracker(object):
     def __init__(self, filepath):
         self.filepath = filepath
         self.rows = self.getRows()
-        self.current_row = 0
+        self.total_clips = len(self.rows)
+        self.checked_clips = 0
 
     def __str__(self):
         return  u'{}<{}>'.format(self.__class__.__name__, self.filepath.path)
@@ -112,9 +111,9 @@ class SegmentTracker(object):
         logging.debug("Duration for %s: %s", self, dur)
         return dur
 
-    def addRow(self, sorted_rows, start, end):
+    def addRow(self, sorted_rows, start, end, priority):
         if not sorted_rows:
-            sorted_rows.append((start, end))
+            sorted_rows.append(PotentialClip(start, end, priority))
             return
         previous_row = (0, 0)
         for row in sorted_rows:
@@ -125,7 +124,7 @@ class SegmentTracker(object):
             # either the candidate fits in the gap
             # or its after all the existing rows
             if end <= row[0] or previous_row == row:
-                sorted_rows.append((start, end))
+                sorted_rows.append(PotentialClip(start, end, priority))
                 sorted_rows.sort()
 
     def traverseGaps(self, rows, duration, movie_end):
@@ -133,16 +132,16 @@ class SegmentTracker(object):
             return duration, movie_end - duration
         gaps = 0
         last_end = 0
-        for start, end in rows:
-            gap = start - last_end
+        for pc in rows:
+            gap = pc.start - last_end
             if gaps <= duration and gaps + gap > duration:
                 # the target location is in this gap!
                 break
             gaps += gap
-            last_end = end
+            last_end = pc.end
         location = last_end + (duration - gaps)
-        if start > location:
-            remaining = start - location
+        if pc.start > location:
+            remaining = pc.start - location
         else:
             remaining = movie_end - location
         return location, remaining
@@ -165,7 +164,7 @@ class SegmentTracker(object):
             start = flag.location - 5
             while start < flag.location + 5:
                 end = start + self.length()
-                self.addRow(rows, start, end)
+                self.addRow(rows, start, end, 0)
                 start = end
         # get the scrubs
         query = sql.select(
@@ -176,7 +175,9 @@ class SegmentTracker(object):
             t.Scrub.c.file_id == pornfile.id_)
         scrubs = sorted([(s, e) for s,e in db.getSession().execute(query).fetchall()])
         last_end = 0
-        for start, end in rows:
+        for potential_clip in rows:
+            start = potential_clip.start
+            end = potential_clip.end
             # deal with overlap
             if end < last_end:
                 continue
@@ -190,15 +191,22 @@ class SegmentTracker(object):
                     break
                 target_length = self.length()
                 if clip_length > target_length:
-                    self.addRow(rows, start, start + target_length)
+                    self.addRow(rows, start, start + target_length, 1)
                     # skip ahead some bit to make it interesting
                     start = start + target_length + random.randint(10, 20)
                 else:
-                    self.addRow(rows, start, end)
+                    self.addRow(rows, start, end, 1)
                     break
-        # fill in gaps to get to 20%:
-        duration = sum(e-s for s,e in rows)
-        while duration / pornfile.length < .2:
+
+        rating = NORMALRATINGS.getRating(pornfile)
+        target_fraction = .04 * rating
+        # fill in gaps to get to get the target_fraction:
+        duration = sum(pc.end - pc.start for pc in rows)
+        logging.info(
+            'Rating: %s; target fraction: %s; current fraction: %s',
+            rating, target_fraction, duration / pornfile.length)
+
+        while duration / pornfile.length < target_fraction:
             start = round(random.random() * (pornfile.length - duration), 1)
             location, remaining = self.traverseGaps(rows, start, pornfile.length)
             length = min(remaining, self.length())
@@ -206,13 +214,15 @@ class SegmentTracker(object):
                 continue
             end = location + length
             # don't need to check this, know its in a gap
-            rows.append((location, end))
+            rows.append(PotentialClip(location, end, 2))
             rows.sort()
             duration += length
         logging.debug('Done getting rows for %s', self)
         return rows
 
-    def _checkCandidate(self, start, end):
+    def _checkCandidate(self, potential_clip):
+        start = potential_clip.start
+        end = potential_clip.end
         overlap_found = False
         existing_clips = self.filepath.pornfile.clips
         for eclip in existing_clips:
@@ -231,21 +241,39 @@ class SegmentTracker(object):
         return clip
 
     def _nextClip(self):
-        logging.debug("Current Row: %s", self.current_row)
+        self.current_row = 0
         while self.current_row < len(self.rows):
+            logging.debug("Current Row: %s", self.current_row)
             start, end = self.rows[self.current_row]
             self.current_row += 1
             yield start, end
 
     def nextClip(self):
-        for start, end in self._nextClip():
-            clip = self._checkCandidate(start, end)
+        for potential_clip in self._nextClip():
+            self.checked_clips += 1
+            clip = self._checkCandidate(potential_clip)
             if clip:
+                logging.info('Returning clip %s out of %s', self.checked_clips, self.total_clips)
                 return clip
             else:
                 continue
         logging.debug('Done with tracker %s', self)
         return None
+
+
+class PriorityRandomSegmentTracker(SegmentTracker):
+    def __init__(self, filepath):
+        SegmentTracker.__init__(self, filepath)
+        self.priority_rows = cols.defaultdict(list)
+        for row in self.rows:
+            self.priority_rows[row[2]].append(row)
+
+    def _nextClip(self):
+        for priority, rows in sorted(self.priority_rows.items()):
+            while rows:
+                i = random.randint(0, len(rows) - 1)
+                yield rows.pop(i)
+
 
 class RandomSegmentTracker(SegmentTracker):
     def _nextClip(self):
@@ -261,10 +289,10 @@ class NextClip(object):
 
     def _newTracker(self):
         fp = next(iinventory)
-        s = RandomSegmentTracker(fp)
+        s = PriorityRandomSegmentTracker(fp)
         return s
 
-    def addTrackers(self, n=10):
+    def addTrackers(self, n=1):
         for _ in range(n):
             self.trackers.append(self._newTracker())
 
@@ -338,6 +366,8 @@ try:
     parser = argparse.ArgumentParser(description='Play your porn collection')
     parser.add_argument('files', nargs='*', help='files to play; play entire collection if omitted')
     parser.add_argument('--shuffle', default=True, type=flexibleBoolean)
+    parser.add_argument(
+        '-n', '--nfiles', default=20, type=int, help='number of files to rotate through')
     args = parser.parse_args()
 
     script.standardSetup()
@@ -355,7 +385,7 @@ try:
     NORMALRATINGS = rating.NormalRatings(db.getSession())
     CONTROLLER = None
 
-    next_clip = NextClip(iinventory, 20)
+    next_clip = NextClip(iinventory, args.nfiles)
     #FILL = reviewer.UrwidReviewWidget(valign='bottom')
     FILL = widget.Status(valign='bottom')
 

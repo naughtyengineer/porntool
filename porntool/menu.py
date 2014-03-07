@@ -122,7 +122,12 @@ class ClipMenuPadding(MenuPadding):
     def __init__(self, clip, adjuster=None):
         filepath = clip.moviefile.getActivePath()
         total = sum(c.duration for c in filepath.pornfile.clips if c.active)
-        title = u"{}: {} sec ({} total)".format(filepath.path, clip.duration, total)
+        try:
+            fraction = total / sum(c.duration for c in filepath.pornfile.clips)
+        except ZeroDivisionError:
+            fraction = 0.0
+        title = u"{}: {} sec ({} total, {:0.0f}%)".format(
+            filepath.path, clip.duration, total, fraction * 100)
         tags = " ".join([t.tag for t in clip.tags])
         self.keep = True
         self.skip = False
