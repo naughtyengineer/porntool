@@ -39,6 +39,13 @@ def ratingrecent(filepath):
 def exists(filepath):
     return os.path.exists(filepath.path)
 
+class IncludeTags(object):
+    def __init__(self, tags):
+        self.tags = set(tags)
+
+    def __call__(self, filepath):
+        return len(set([t.tag for t in filepath.pornfile.tags]) & self.tags) > 0
+
 class ExcludeTags(object):
     def __init__(self, tags):
         self.tags = set(tags)

@@ -83,6 +83,7 @@ def adjustClip(clip_menu):
     CONTROLLER.start()
     CONTROLLER.player.communicate('volume 10 1')
 
+
 def editClip(clip):
     logging.debug('Starting editClip')
     main = menu.ClipMenuPadding(clip, adjustClip)
@@ -108,7 +109,7 @@ class SegmentTracker(object):
 
     def checkedDuration(self):
         dur = sum(c.duration for c in self.filepath.pornfile.clips)
-        logging.debug("Duration for %s: %s", self, dur)
+        #logging.debug("Duration for %s: %s", self, dur)
         return dur
 
     def addRow(self, sorted_rows, start, end, priority):
@@ -261,6 +262,20 @@ class SegmentTracker(object):
         return None
 
 
+class ExistingSegmentTracker(SegmentTracker):
+    def __init__(self, filepath):
+        SegmentTracker.__init__(self, filepath)
+        self.current_row = 0
+        self.clips = sorted(
+            [c for c in self.filepath.pornfile.clips if c.active],
+            key=lambda c: c.start)
+
+    def nextClip(self):
+        row = self.current_row
+        self.current_row += 1
+        return self.clips[row] if row < len(self.clips) else None
+
+
 class PriorityRandomSegmentTracker(SegmentTracker):
     def __init__(self, filepath):
         SegmentTracker.__init__(self, filepath)
@@ -282,19 +297,25 @@ class RandomSegmentTracker(SegmentTracker):
             yield self.rows.pop(i)
 
 class NextClip(object):
-    def __init__(self, iinventory, n=20):
+    def __init__(self, iinventory, n=20, tracker_factory=None):
         self.iinventory = iinventory
-        self.trackers = [self._newTracker() for _ in range(n)]
+        self.tracker_factory = tracker_factory if tracker_factory else PriorityRandomSegmentTracker
+        self.trackers = []
+        self.addTrackers(n)
         self.current_tracker = None
+
 
     def _newTracker(self):
         fp = next(iinventory)
-        s = PriorityRandomSegmentTracker(fp)
+        s = self.tracker_factory(fp)
         return s
 
     def addTrackers(self, n=1):
         for _ in range(n):
-            self.trackers.append(self._newTracker())
+            try:
+                self.trackers.append(self._newTracker())
+            except StopIteration:
+                break
 
     def removeTracker(self, tracker):
         logging.debug('Removing tracker: %s', tracker)
@@ -306,12 +327,15 @@ class NextClip(object):
         except StopIteration:
             pass
 
+    def _nextTracker(self):
+        return min(self.trackers, key=lambda t: t.checkedDuration())
+
     def getNextClip(self):
         if not self.trackers:
             logging.debug('Exiting!')
             raise urwid.ExitMainLoop()
         #tracker = random.choice(self.trackers)
-        tracker = min(self.trackers, key=lambda t: t.checkedDuration())
+        tracker = self._nextTracker()
         self.current_tracker = tracker
         logging.debug('Switching to %s', tracker)
         clip = tracker.nextClip()
@@ -330,7 +354,10 @@ class NextClip(object):
         CONTROLLER.start()
         def finish():
             CONTROLLER.player.quit()
-            editClip(clip)
+            if ARGS.no_edit:
+                self.playNextClip()
+            else:
+                editClip(clip)
         CONTROLLER.player.communicate('volume 10 1')
         CONTROLLER.player.seekAndPlay(
             start=clip.start, duration=clip.duration, onFinished=finish)
@@ -362,22 +389,29 @@ class NextClip(object):
         self.setupController(clip)
 
 
+class RandomNextClip(NextClip):
+    def _nextTracker(self):
+        return random.choice(self.trackers)
+
+
 try:
     parser = argparse.ArgumentParser(description='Play your porn collection')
     parser.add_argument('files', nargs='*', help='files to play; play entire collection if omitted')
     parser.add_argument('--shuffle', default=True, type=flexibleBoolean)
     parser.add_argument(
         '-n', '--nfiles', default=20, type=int, help='number of files to rotate through')
-    args = parser.parse_args()
+    parser.add_argument('--type', choices=('new', 'existing'), default='new')
+    parser.add_argument('--no_edit', action='store_true', default=False)
+    ARGS = parser.parse_args()
 
     script.standardSetup()
     logging.info('****** Starting new script ********')
 
-    filepaths = movie.loadFiles(args.files)
+    filepaths = movie.loadFiles(ARGS.files)
     db.getSession().commit()
 
     inventory = movie.MovieInventory(
-        filepaths, args.shuffle,
+        filepaths, ARGS.shuffle,
         [filters.exists, isNotNewFilter(), filters.ExcludeTags(['pmv', 'cock.hero'])])
 
     iinventory = inventory_filter(inventory)
@@ -385,7 +419,10 @@ try:
     NORMALRATINGS = rating.NormalRatings(db.getSession())
     CONTROLLER = None
 
-    next_clip = NextClip(iinventory, args.nfiles)
+    if ARGS.type == 'new':
+        next_clip = NextClip(iinventory, ARGS.nfiles)
+    elif ARGS.type == 'existing':
+        next_clip = RandomNextClip(iinventory, ARGS.nfiles, ExistingSegmentTracker)
     #FILL = reviewer.UrwidReviewWidget(valign='bottom')
     FILL = widget.Status(valign='bottom')
 

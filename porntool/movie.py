@@ -61,6 +61,7 @@ def getMovie(filename, add_movie=None):
 
 
 def checkAndAddFile(abspath, filepath_list, add_movie):
+    logger.debug('Checking %s', abspath)
     if os.path.isdir(abspath):
         for file_ in os.listdir(abspath):
             if file_[0] == '.':

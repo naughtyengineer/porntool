@@ -112,8 +112,8 @@ class SlavePlayer(widget.OnFinished, widget.LoopAware):
         widget.OnFinished.__init__(self)
         widget.LoopAware.__init__(self)
 
-
     def saveScrub(self, end):
+        # should probably just make this available and have the caller save it
         if self.save_scrub and self._scrub_start is not None:
             db.getSession().execute(tables.Scrub.insert().values(
                 file_id=self.filepath.file_id, start=self._scrub_start, end=end))

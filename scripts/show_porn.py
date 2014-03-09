@@ -65,6 +65,7 @@ parser = argparse.ArgumentParser(description='Play your porn collection')
 parser.add_argument('files', nargs='*', help='files to play; play entire collection if omitted')
 parser.add_argument('--shuffle', default=True, type=flexibleBoolean)
 parser.add_argument('--playcount', type=int)
+parser.add_argument('--include_tags', nargs="+")
 args = parser.parse_args()
 
 script.standardSetup()
@@ -78,8 +79,10 @@ try:
     else:
         count_filter = None
 
+    tag_filter = filters.IncludeTags(args.include_tags) if args.include_tags else None
+
     inventory = movie.MovieInventory(
-        filepaths, args.shuffle, [filters.exists, count_filter])
+        filepaths, args.shuffle, [filters.exists, count_filter, tag_filter])
     iinventory = iter(inventory)
 
     NORMALRATINGS = rating.NormalRatings(db.getSession())
