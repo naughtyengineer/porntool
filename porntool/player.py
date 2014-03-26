@@ -16,16 +16,25 @@ TRACE = logging.DEBUG - 1
 DEVNULL = open(os.devnull, 'w')
 
 class MoviePlayer(object):
-    def __init__(self, filename):
-        self.filename = filename
+    def __init__(self, filepath):
+        self.filepath = filepath
+        self.filename = filepath.path
 
     def identify(self):
-        logger.debug('Calling `identify` on %s', self.filename)
-        p = subprocess.Popen(
-            [configure.get('MPLAYER'), "--vo=null", "--ao=null", "--identify",
-             "--frames=0", self.filename],
-            stdout=subprocess.PIPE, stderr=DEVNULL)
-        (out, err) = p.communicate()
+        identify = self.filepath.pornfile.identify
+        if identify:
+            out = identify.output
+        else:
+            logger.debug('Calling `identify` on %s', self.filename)
+            p = subprocess.Popen(
+                [configure.get('MPLAYER'), "--vo=null", "--ao=null", "--identify",
+                 "--frames=0", self.filename],
+                stdout=subprocess.PIPE, stderr=DEVNULL)
+            (out, err) = p.communicate()
+            out = out.decode('utf-8')
+            identify = tables.Identify(
+                file_id = self.filepath.pornfile.id_, output=out)
+            self.filepath.pornfile.identify = identify
 
         video_height_m = re.search("ID_VIDEO_HEIGHT=(\d*)", out)
         video_width_m = re.search("ID_VIDEO_WIDTH=(\d*)", out)

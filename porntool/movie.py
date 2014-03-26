@@ -19,7 +19,7 @@ valid_mov_ext = [".avi", ".mpg", ".wmv", ".flv", ".mov", ".mp4",
 def updateMissingProperties(file_path):
     moviefile = file_path.pornfile
     if moviefile.length is None:
-        mp = player.MoviePlayer(file_path.path)
+        mp = player.MoviePlayer(file_path)
         mp.identify()
         moviefile.length = mp.length
 

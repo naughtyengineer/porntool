@@ -19,6 +19,7 @@ from porntool import rating
 from porntool import reviewer
 from porntool import script
 from porntool import tables as t
+from porntool import util
 from porntool import widget
 
 PotentialClip = cols.namedtuple('PotentialClip', ['start', 'end', 'priority'])
@@ -40,7 +41,7 @@ def isNotNewFilter():
 
 
 def is1080(filepath):
-    mp = player.MoviePlayer(filepath.path)
+    mp = player.MoviePlayer(filepath)
     mp.identify()
     return mp.height > 720 or mp.width > 1280
 
@@ -52,9 +53,9 @@ def inventory_filter(inventory):
         if fp.path.find('empornium') >= 0:
             continue
         logging.debug('Checking %s', fp)
-        if os.path.splitext(fp.path)[1] != '.mp4':
-            logging.debug('Skipping %s: not an mp4 file', fp)
-            continue
+        # if os.path.splitext(fp.path)[1] != '.mp4':
+        #     logging.debug('Skipping %s: not an mp4 file', fp)
+        #     continue
         if is1080(fp):
             logging.debug('Skipping %s:  too high def', fp)
             continue
@@ -128,19 +129,27 @@ class SegmentTracker(object):
                 sorted_rows.append(PotentialClip(start, end, priority))
                 sorted_rows.sort()
 
-    def traverseGaps(self, rows, duration, movie_end):
+    def traverseGaps(self, rows, start, movie_end):
+        """
+        `start` is in 'gap terms', not absolute terms. so, if start
+        is 10 seconds - it means ten seconds worth of gap if the
+        first minute is already in `rows`, then the start would
+        actually be 1:10.
+
+        return: (location in absolute terms, remaining duration in the current gap)
+        """
         if not rows:
-            return duration, movie_end - duration
+            return start, movie_end - start
         gaps = 0
         last_end = 0
         for pc in rows:
             gap = pc.start - last_end
-            if gaps <= duration and gaps + gap > duration:
+            if gaps <= start and gaps + gap > start:
                 # the target location is in this gap!
                 break
             gaps += gap
             last_end = pc.end
-        location = last_end + (duration - gaps)
+        location = last_end + (start - gaps)
         if pc.start > location:
             remaining = pc.start - location
         else:
@@ -149,14 +158,12 @@ class SegmentTracker(object):
 
     def getRows(self):
         logging.debug('Getting Rows for %s', self)
-        # a better way would be to first get the flags and make some
-        # potential clips around each one
-        # and then get the scrub data
-        # and then add in random potential clips from the empty space
-        # to fill the target (either a total length or a fraction of
-        # the movie)
-        rows = []
         pornfile = self.filepath.pornfile
+
+        # first load up the existing clips
+        rows = [PotentialClip(c.start, c.end, 0) for c in
+                sorted(pornfile.clips, key=lambda clip: clip.start)]
+
         # get the flags
         flags = db.getSession().query(t.Flag).filter(
             t.Flag.file_id==pornfile.id_).all()
@@ -167,6 +174,7 @@ class SegmentTracker(object):
                 end = start + self.length()
                 self.addRow(rows, start, end, 0)
                 start = end
+
         # get the scrubs
         query = sql.select(
             [t.Scrub.c.start, t.Scrub.c.end]
@@ -274,6 +282,11 @@ class ExistingSegmentTracker(SegmentTracker):
         row = self.current_row
         self.current_row += 1
         return self.clips[row] if row < len(self.clips) else None
+
+class RandomExistingSegmentTracker(ExistingSegmentTracker):
+    def __init__(self, filepath):
+        ExistingSegmentTracker.__init__(self, filepath)
+        random.shuffle(self.clips)
 
 
 class PriorityRandomSegmentTracker(SegmentTracker):
@@ -393,21 +406,32 @@ class RandomNextClip(NextClip):
     def _nextTracker(self):
         return random.choice(self.trackers)
 
+parser = argparse.ArgumentParser(description='Play your porn collection')
+parser.add_argument('files', nargs='*', help='files to play; play entire collection if omitted')
+parser.add_argument('--shuffle', default=True, type=flexibleBoolean)
+parser.add_argument(
+    '-n', '--nfiles', default=20, type=int, help='number of files to rotate through')
+parser.add_argument('--type', choices=('new', 'existing'), default='new')
+parser.add_argument('--no_edit', action='store_true', default=False)
+parser.add_argument('--tracker', choices=('least', 'shuffle'), default='least')
+parser.add_argument('--update_library', action='store_true', default=False)
+ARGS = parser.parse_args()
 
 try:
-    parser = argparse.ArgumentParser(description='Play your porn collection')
-    parser.add_argument('files', nargs='*', help='files to play; play entire collection if omitted')
-    parser.add_argument('--shuffle', default=True, type=flexibleBoolean)
-    parser.add_argument(
-        '-n', '--nfiles', default=20, type=int, help='number of files to rotate through')
-    parser.add_argument('--type', choices=('new', 'existing'), default='new')
-    parser.add_argument('--no_edit', action='store_true', default=False)
-    ARGS = parser.parse_args()
-
     script.standardSetup()
     logging.info('****** Starting new script ********')
 
-    filepaths = movie.loadFiles(ARGS.files)
+    if ARGS.update_library:
+        filepaths = movie.loadFiles(ARGS.files)
+    else:
+        uniq_filepaths = {}
+        for file_ in ARGS.files:
+            some_filepaths = db.getSession().query(t.FilePath).filter(
+                (t.FilePath.hostname == util.hostname) &
+                (t.FilePath.path.like('{}%'.format(file_)))
+            ).all()
+            uniq_filepaths.update({fp.file_id: fp for fp in some_filepaths})
+        filepaths = uniq_filepaths.values()
     db.getSession().commit()
 
     inventory = movie.MovieInventory(
@@ -420,9 +444,12 @@ try:
     CONTROLLER = None
 
     if ARGS.type == 'new':
-        next_clip = NextClip(iinventory, ARGS.nfiles)
+        if ARGS.tracker == 'least':
+            next_clip = NextClip(iinventory, ARGS.nfiles)
+        elif ARGS.tracker == 'shuffle':
+            next_clip = RandomNextClip(iinventory, ARGS.nfiles)
     elif ARGS.type == 'existing':
-        next_clip = RandomNextClip(iinventory, ARGS.nfiles, ExistingSegmentTracker)
+        next_clip = RandomNextClip(iinventory, ARGS.nfiles, RandomExistingSegmentTracker)
     #FILL = reviewer.UrwidReviewWidget(valign='bottom')
     FILL = widget.Status(valign='bottom')
 

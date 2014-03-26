@@ -152,6 +152,13 @@ class Flag(Base):
     moviefile = orm.relationship('MovieFile', backref=orm.backref('flags'))
 
 
+class Identify(Base):
+    __tablename__ = 'identify'
+    file_id = sql.Column(sql.Integer, sql.ForeignKey('movie.file_id'), primary_key=True)
+    output = sql.Column(sql.Text)
+    moviefile = orm.relationship('MovieFile', backref=orm.backref('identify', uselist=False))
+
+
 Usage = sql.Table(
     'usage', Base.metadata,
     sql.Column('file_id', sql.Integer, sql.ForeignKey('file.id')),
