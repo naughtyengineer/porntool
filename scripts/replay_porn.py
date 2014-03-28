@@ -22,7 +22,9 @@ from porntool import tables as t
 from porntool import util
 from porntool import widget
 
+
 PotentialClip = cols.namedtuple('PotentialClip', ['start', 'end', 'priority'])
+
 
 def flexibleBoolean(x):
     x = x.lower()
@@ -50,18 +52,19 @@ def inventory_filter(inventory):
     # a function for filters specific to this script
     # that aren't worth adding to filter module
     for fp in inventory:
-        if fp.path.find('empornium') >= 0:
-            continue
-        logging.debug('Checking %s', fp)
-        # if os.path.splitext(fp.path)[1] != '.mp4':
-        #     logging.debug('Skipping %s: not an mp4 file', fp)
+        # if fp.path.find('empornium') >= 0:
         #     continue
+        logging.debug('Checking %s', fp)
+        if os.path.splitext(fp.path)[1] != '.mp4':
+            logging.debug('Skipping %s: not an mp4 file', fp)
+            continue
         if is1080(fp):
             logging.debug('Skipping %s:  too high def', fp)
             continue
-        if sum(c.duration for c in fp.pornfile.clips if c.active) > 180:
-            logging.debug('Skipping %s because we have enough clips', fp)
-            continue
+        if not ARGS.type == 'existing':
+            if sum(c.duration for c in fp.pornfile.clips if c.active) > 180:
+                logging.debug('Skipping %s because we have enough clips', fp)
+                continue
         # a bit of a hack, sorry
         movie.updateMissingProperties(fp)
         yield fp
@@ -311,15 +314,14 @@ class RandomSegmentTracker(SegmentTracker):
 
 class NextClip(object):
     def __init__(self, iinventory, n=20, tracker_factory=None):
-        self.iinventory = iinventory
-        self.tracker_factory = tracker_factory if tracker_factory else PriorityRandomSegmentTracker
+        self.iinventory = inventory_filter(iinventory)
+        self.tracker_factory = tracker_factory or PriorityRandomSegmentTracker
         self.trackers = []
         self.addTrackers(n)
         self.current_tracker = None
 
-
     def _newTracker(self):
-        fp = next(iinventory)
+        fp = next(self.iinventory)
         s = self.tracker_factory(fp)
         return s
 
@@ -438,7 +440,7 @@ try:
         filepaths, ARGS.shuffle,
         [filters.exists, isNotNewFilter(), filters.ExcludeTags(['pmv', 'cock.hero'])])
 
-    iinventory = inventory_filter(inventory)
+    iinventory = (inventory)
 
     NORMALRATINGS = rating.NormalRatings(db.getSession())
     CONTROLLER = None

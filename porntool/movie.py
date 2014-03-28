@@ -122,6 +122,7 @@ class MovieInventory(object):
             passes_filters = True
             for filt in self.filters:
                 if filt and not filt(file_):
+                    logger.debug('%s Failed filter: %s', file_, filt.__name__)
                     passes_filters = False
                     break
             if passes_filters:
