@@ -33,11 +33,13 @@ def _play_recentrating(count, rating, last):
     print "Prob = %s, Random = %s" % (prob, rnd)
     return  rnd < (prob)
 
-def ratingrecent(filepath):
-    return _play_recentrating(movie.count, movie.rating, movie.last)
+class RatingRecent(object):
+    def __call__(self, movie):
+        return _play_recentrating(movie.count, movie.rating, movie.last)
 
-def exists(filepath):
-    return os.path.exists(filepath.path)
+class Exists(object):
+    def __call__(self, filepath):
+        return os.path.exists(filepath.path)
 
 class IncludeTags(object):
     def __init__(self, tags):

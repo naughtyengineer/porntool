@@ -48,7 +48,7 @@ def is1080(filepath):
     return mp.height > 720 or mp.width > 1280
 
 
-def inventory_filter(inventory):
+def inventoryFilter(inventory):
     # a function for filters specific to this script
     # that aren't worth adding to filter module
     for fp in inventory:
@@ -61,10 +61,6 @@ def inventory_filter(inventory):
         if is1080(fp):
             logging.debug('Skipping %s:  too high def', fp)
             continue
-        if not ARGS.type == 'existing':
-            if sum(c.duration for c in fp.pornfile.clips if c.active) > 180:
-                logging.debug('Skipping %s because we have enough clips', fp)
-                continue
         # a bit of a hack, sorry
         movie.updateMissingProperties(fp)
         yield fp
@@ -265,7 +261,8 @@ class SegmentTracker(object):
             self.checked_clips += 1
             clip = self._checkCandidate(potential_clip)
             if clip:
-                logging.info('Returning clip %s out of %s', self.checked_clips, self.total_clips)
+                logging.info(
+                    'Returning clip %s out of %s', self.checked_clips, self.total_clips)
                 return clip
             else:
                 continue
@@ -312,9 +309,22 @@ class RandomSegmentTracker(SegmentTracker):
             i = random.randint(0, len(self.rows)-1)
             yield self.rows.pop(i)
 
+
+class CountSegmentTracker(PriorityRandomSegmentTracker):
+    def __init__(self, filepath, n):
+        PriorityRandomSegmentTracker.__init__(self, filepath)
+        self.checked_clips = len(self.filepath.pornfile.clips)
+        self.n = n
+
+    def _nextClip(self):
+        for item in super(CountSegmentTracker, self)._nextClip():
+            if self.checked_clips < self.n:
+                yield item
+
+
 class NextClip(object):
     def __init__(self, iinventory, n=20, tracker_factory=None):
-        self.iinventory = inventory_filter(iinventory)
+        self.iinventory = inventoryFilter(iinventory)
         self.tracker_factory = tracker_factory or PriorityRandomSegmentTracker
         self.trackers = []
         self.addTrackers(n)
@@ -392,7 +402,7 @@ class NextClip(object):
                 db.getSession().delete(fmp.clip)
                 self.removeTracker(self.current_tracker)
             if hasattr(fmp, 'add') and fmp.add:
-                self.addTrackers()
+                self.addTrackers(fmp.add)
         try:
             same_movie = fmp and fmp.same_movie
         except:
@@ -408,15 +418,37 @@ class RandomNextClip(NextClip):
     def _nextTracker(self):
         return random.choice(self.trackers)
 
+
+class OnlyNewClips(RandomNextClip):
+    def _newTracker(self):
+        while True:
+            fp = next(self.iinventory)
+            if len(fp.pornfile.clips) == 0:
+                s = self.tracker_factory(fp)
+                return s
+
+
+segment_trackers = {
+    'new': PriorityRandomSegmentTracker,
+    'existing': RandomExistingSegmentTracker,
+    'sample': lambda fp: CountSegmentTracker(fp, 10),
+}
+
+clip_types = {
+    'least': NextClip,
+    'shuffle': RandomNextClip,
+    'new': OnlyNewClips,
+}
+
 parser = argparse.ArgumentParser(description='Play your porn collection')
 parser.add_argument('files', nargs='*', help='files to play; play entire collection if omitted')
 parser.add_argument('--shuffle', default=True, type=flexibleBoolean)
 parser.add_argument(
     '-n', '--nfiles', default=20, type=int, help='number of files to rotate through')
-parser.add_argument('--type', choices=('new', 'existing'), default='new')
-parser.add_argument('--no_edit', action='store_true', default=False)
-parser.add_argument('--tracker', choices=('least', 'shuffle'), default='least')
-parser.add_argument('--update_library', action='store_true', default=False)
+parser.add_argument('--no-edit', action='store_true', default=False)
+parser.add_argument('--clip-type', choices=clip_types.keys(), default='new')
+parser.add_argument('--tracker', choices=segment_trackers.keys(), default='sample')
+parser.add_argument('--update-library', action='store_true', default=False)
 ARGS = parser.parse_args()
 
 try:
@@ -427,32 +459,30 @@ try:
         filepaths = movie.loadFiles(ARGS.files)
     else:
         uniq_filepaths = {}
+        filepaths = []
         for file_ in ARGS.files:
             some_filepaths = db.getSession().query(t.FilePath).filter(
                 (t.FilePath.hostname == util.hostname) &
                 (t.FilePath.path.like('{}%'.format(file_)))
             ).all()
-            uniq_filepaths.update({fp.file_id: fp for fp in some_filepaths})
-        filepaths = uniq_filepaths.values()
+            filepaths.extend(some_filepaths)
+            #uniq_filepaths.update({fp.file_id: fp for fp in some_filepaths})
+        #filepaths = uniq_filepaths.values()
     db.getSession().commit()
 
     inventory = movie.MovieInventory(
         filepaths, ARGS.shuffle,
-        [filters.exists, isNotNewFilter(), filters.ExcludeTags(['pmv', 'cock.hero'])])
+        [filters.Exists(), isNotNewFilter(), filters.ExcludeTags(['pmv', 'cock.hero'])])
 
     iinventory = (inventory)
 
     NORMALRATINGS = rating.NormalRatings(db.getSession())
     CONTROLLER = None
 
-    if ARGS.type == 'new':
-        if ARGS.tracker == 'least':
-            next_clip = NextClip(iinventory, ARGS.nfiles)
-        elif ARGS.tracker == 'shuffle':
-            next_clip = RandomNextClip(iinventory, ARGS.nfiles)
-    elif ARGS.type == 'existing':
-        next_clip = RandomNextClip(iinventory, ARGS.nfiles, RandomExistingSegmentTracker)
-    #FILL = reviewer.UrwidReviewWidget(valign='bottom')
+    segment_tracker = segment_trackers[ARGS.tracker]
+    clip_type = clip_types[ARGS.clip_type]
+    next_clip = clip_type(iinventory, ARGS.nfiles, segment_tracker)
+
     FILL = widget.Status(valign='bottom')
 
     # bold is needed for the AdjustController

@@ -16,7 +16,7 @@ class QuestionBox(urwid.Edit):
     def __init__(self, onEnter, onEsc, *args, **kwargs):
         self.onEnter = onEnter
         self.onEsc = onEsc
-        super(QuestionBox, self).__init__(*args, **kwargs)
+        urwid.Edit.__init__(self, *args, **kwargs)
 
     def keypress(self, size, key):
         if key == 'enter':
@@ -57,7 +57,7 @@ class Menu(urwid.ListBox):
 class FileEditor(urwid.ListBox):
     def __init__(self, title, question_box):
         body = [urwid.Text(title), urwid.Divider(), question_box]
-        super(FileEditor, self).__init__(urwid.SimpleListWalker(body))
+        urwid.ListBox.__init__(self, urwid.SimpleListWalker(body))
 
 
 class MenuPadding(urwid.Padding, widget.OnFinished, widget.LoopAware):
@@ -121,13 +121,15 @@ class TagEditor(MenuPadding):
 class ClipMenuPadding(MenuPadding):
     def __init__(self, clip, adjuster=None):
         filepath = clip.moviefile.getActivePath()
-        total = sum(c.duration for c in filepath.pornfile.clips if c.active)
+        active = [c for c in filepath.pornfile.clips if c.active]
+        total = sum(c.duration for c in active)
         try:
-            fraction = total / sum(c.duration for c in filepath.pornfile.clips)
+            numer = len(active)
+            denom = len(filepath.pornfile.clips)
         except ZeroDivisionError:
             fraction = 0.0
-        title = u"{}: {} sec ({} total, {:0.0f}%)".format(
-            filepath.path, clip.duration, total, fraction * 100)
+        title = u"{}: {} sec ({} total, {} / {})".format(
+            filepath.path, clip.duration, total, numer, denom)
         tags = " ".join([t.tag for t in clip.tags])
         self.keep = True
         self.skip = False
@@ -147,8 +149,13 @@ class ClipMenuPadding(MenuPadding):
         super(ClipMenuPadding, self).__init__(title=title, buttons=buttons)
 
     def addMovies(self, button):
-        self.add = True
-        self.nextFile(button)
+        def done():
+            self.add = int(qb.edit_text)
+            self.nextFile(button)
+        qb = QuestionBox(done, self.toMain, 'How Many Files: ', '10')
+        fe = FileEditor(self.title, qb)
+        self.original_widget = fe
+
 
     def delete(self, button):
         self.keep = False

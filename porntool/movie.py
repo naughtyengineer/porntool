@@ -95,7 +95,7 @@ class MovieInventory(object):
         self.filepaths = filepaths
         self.shuffle = shuffle
         self.current_movie = 0
-        basic_filters = basic_filters if basic_filters else [filters.exists]
+        basic_filters = basic_filters if basic_filters else [filters.Exists()]
         self.filters = basic_filters + (extra_filters if extra_filters else [])
 
     def __iter__(self):
@@ -122,7 +122,7 @@ class MovieInventory(object):
             passes_filters = True
             for filt in self.filters:
                 if filt and not filt(file_):
-                    logger.debug('%s Failed filter: %s', file_, filt.__name__)
+                    logger.debug('%s Failed filter: %s', file_, filt)
                     passes_filters = False
                     break
             if passes_filters:
