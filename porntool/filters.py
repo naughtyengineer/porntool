@@ -55,10 +55,19 @@ class ExcludeTags(object):
     def __call__(self, filepath):
         return len(set([t.tag for t in filepath.pornfile.tags]) & self.tags) == 0
 
-class ByCount(object):
+class ByMaxCount(object):
     def __init__(self, session, count):
         self.session = session
         self.count = count
 
     def __call__(self, filepath):
         return filepath.pornfile.getPlayCount(self.session) <= self.count
+
+
+class ByMinCount(object):
+    def __init__(self, session, count):
+        self.session = session
+        self.count = count
+
+    def __call__(self, filepath):
+        return filepath.pornfile.getPlayCount(self.session) >= self.count

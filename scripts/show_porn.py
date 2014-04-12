@@ -82,7 +82,7 @@ try:
     tag_filter = filters.IncludeTags(args.include_tags) if args.include_tags else None
 
     inventory = movie.MovieInventory(
-        filepaths, args.shuffle, [filters.exists, count_filter, tag_filter])
+        filepaths, args.shuffle, [filters.Exists(), count_filter, tag_filter])
     iinventory = iter(inventory)
 
     NORMALRATINGS = rating.NormalRatings(db.getSession())

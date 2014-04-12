@@ -9,32 +9,35 @@ from porntool import async_subprocess
 from porntool import configure
 from porntool import db
 from porntool import tables
+from porntool import util
 from porntool import widget
 
 logger = logging.getLogger(__name__)
 TRACE = logging.DEBUG - 1
-DEVNULL = open(os.devnull, 'w')
+
+
+
+def identify(filepath, **kwargs):
+    mp = MoviePlayer(filepath)
+    mp.identify(**kwargs)
+    return mp
+
 
 class MoviePlayer(object):
     def __init__(self, filepath):
         self.filepath = filepath
         self.filename = filepath.path
 
-    def identify(self):
+    def identify(self, check_cache=True, save_to_cache=True):
         identify = self.filepath.pornfile.identify
-        if identify:
+        if check_cache and identify:
             out = identify.output
         else:
-            logger.debug('Calling `identify` on %s', self.filename)
-            p = subprocess.Popen(
-                [configure.get('MPLAYER'), "--vo=null", "--ao=null", "--identify",
-                 "--frames=0", self.filename],
-                stdout=subprocess.PIPE, stderr=DEVNULL)
-            (out, err) = p.communicate()
-            out = out.decode('utf-8')
-            identify = tables.Identify(
-                file_id = self.filepath.pornfile.id_, output=out)
-            self.filepath.pornfile.identify = identify
+            out = util.identify(self.filename)
+            if save_to_cache:
+                identify = tables.Identify(
+                    file_id = self.filepath.pornfile.id_, output=out)
+                self.filepath.pornfile.identify = identify
 
         video_height_m = re.search("ID_VIDEO_HEIGHT=(\d*)", out)
         video_width_m = re.search("ID_VIDEO_WIDTH=(\d*)", out)
@@ -51,8 +54,6 @@ class MoviePlayer(object):
             if m:
                 setattr(self, m.group(1).lower(), m.group(2))
 
-
-
     def start(self, *args):
         cmd = "{} --really-quiet".format(configure.get('MPLAYER')).strip().split()
         cmd += args
@@ -60,6 +61,7 @@ class MoviePlayer(object):
         logger.debug('Running: %s', cmd)
         p = subprocess.Popen(cmd)
         p.wait()
+
 
 class OutputParser(object):
     stdin = ''
@@ -75,12 +77,14 @@ class OutputParser(object):
             if f:
                 f(*args)
 
+
 class IsFinishedParser(OutputParser):
     def __call__(self, output):
         m = re.search('Exiting', output)
         if m:
             self.onSuccess()
         self.active = False
+
 
 class TimePosParser(OutputParser):
     stdin = 'get_time_pos\n'
@@ -95,18 +99,22 @@ class SlavePlayer(widget.OnFinished, widget.LoopAware):
     SEEK_RELATIVE = 0
     SEEK_PERCENTAGE = 1
     SEEK_ABSOLUTE = 2
-    DEFAULT_CMD =('{player} --slave --quiet '
+    DEFAULT_CMD = ('{player} --slave --quiet '
                   '--input=nodefault-bindings --noconfig=all '
-                  '{extra} --geometry=1440x640+0+900')
+                  '{extra} {geom}')
+    DEFAULT_GEOM = '--geometry=1440x640+0+900'
     # --msglevel=global=6
     # has a line like: EOF code: XXX
 
-    def __init__(self, filepath, cmd=None, extra=''):
+    def __init__(self, filepath, cmd=None, extra='', geom=None):
         filename = filepath.path
         self.filepath = filepath
         if not cmd:
             cmd = self.DEFAULT_CMD
-        self.cmd = cmd.format(player=configure.get('MPLAYER'), extra=extra).split() + [filename]
+        if geom is None:
+            geom = self.DEFAULT_GEOM
+        self.cmd = cmd.format(
+            player=configure.get('MPLAYER'), extra=extra, geom=geom).split() + [filename]
         self.p = None
         self.playtime = 0
         self._log = open('mplayer.log', 'w')

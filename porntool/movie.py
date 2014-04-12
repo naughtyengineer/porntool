@@ -21,6 +21,7 @@ def updateMissingProperties(file_path):
     if moviefile.length is None:
         mp = player.MoviePlayer(file_path)
         mp.identify()
+        logger.debug('Setting length on %s to %s', file_path, mp.length)
         moviefile.length = mp.length
 
 def addMovie(filename):
