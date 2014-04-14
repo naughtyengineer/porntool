@@ -130,7 +130,7 @@ class ClipPlayer(object):
 
 segment_trackers = {
     'new': segment.PriorityRandomSegmentTracker,
-    'existing': segment.RandomExistingSegmentTracker,
+    'existing': segment.ExistingSegmentTracker,
     'sample': lambda fp, n: segment.CountSegmentTracker(fp, n, 10),
 }
 
