@@ -64,7 +64,8 @@ def nextMovie(fmp=None, *args):
 parser = argparse.ArgumentParser(description='Play your porn collection')
 parser.add_argument('files', nargs='*', help='files to play; play entire collection if omitted')
 parser.add_argument('--shuffle', default=True, type=flexibleBoolean)
-parser.add_argument('--playcount', type=int)
+parser.add_argument('--max-count', type=int)
+parser.add_argument('--min-count', type=int)
 parser.add_argument('--include_tags', nargs="+")
 args = parser.parse_args()
 
@@ -74,15 +75,18 @@ try:
     filepaths = movie.loadFiles(args.files, add_movie=movie.addMovie)
     db.getSession().commit()
 
-    if args.playcount is not None:
-        count_filter = filters.ByCount(db.getSession(), args.playcount)
-    else:
-        count_filter = None
+    all_filters = [filters.Exists()]
+
+    if args.min_count is not None:
+        all_filters.append(filters.ByMinCount(db.getSession(), args.min_count))
+
+    if args.max_count is not None:
+        all_filters.append(filters.ByMaxCount(db.getSession(), args.max_count))
+
 
     tag_filter = filters.IncludeTags(args.include_tags) if args.include_tags else None
 
-    inventory = movie.MovieInventory(
-        filepaths, args.shuffle, [filters.Exists(), count_filter, tag_filter])
+    inventory = movie.MovieInventory(filepaths, args.shuffle, all_filters)
     iinventory = iter(inventory)
 
     NORMALRATINGS = rating.NormalRatings(db.getSession())

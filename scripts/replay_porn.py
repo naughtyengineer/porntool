@@ -38,12 +38,12 @@ def inventoryFilter(inventory):
         # if fp.path.find('empornium') >= 0:
         #     continue
         logging.debug('Checking %s', fp)
-        if os.path.splitext(fp.path)[1] != '.mp4':
-            logging.debug('Skipping %s: not an mp4 file', fp)
-            continue
-        if is1080(fp):
-            logging.debug('Skipping %s:  too high def', fp)
-            continue
+        # if os.path.splitext(fp.path)[1] != '.mp4':
+        #     logging.debug('Skipping %s: not an mp4 file', fp)
+        #     continue
+        # if is1080(fp):
+        #     logging.debug('Skipping %s:  too high def', fp)
+        #     continue
         # a bit of a hack, sorry
         movie.updateMissingProperties(fp)
         yield fp
@@ -172,7 +172,8 @@ try:
 
     inventory = movie.MovieInventory(
         filepaths, ARGS.shuffle,
-        [filters.Exists(), filters.ByMinCount(db.getSession(), 1),
+        [filters.Exists(),
+         #filters.ByMinCount(db.getSession(), 1),
          filters.ExcludeTags(['pmv', 'cock.hero'])])
 
     iinventory = inventoryFilter(inventory)

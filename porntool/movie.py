@@ -35,6 +35,9 @@ def addMovie(filename):
         logger.info('Adding a new file: %s', filename)
         mf = tables.MovieFile(hash_=file_hash, active=1, size=os.path.getsize(filename))
         session.add(mf)
+    except sql.MultipleResultsFound:
+        logging.error('Multiple results found for %s', file_hash)
+        raise
     fp = tables.FilePath(path=filename, hostname=util.hostname)
     mf.paths.append(fp)
 
