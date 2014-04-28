@@ -1,4 +1,5 @@
 import collections
+import codecs
 import logging
 import os
 import subprocess
@@ -70,8 +71,8 @@ def extractClip(
 
     try:
         log_output = '{}.log'.format(clip.id_)
-        with open(log_output, 'w') as f:
-            f.write('ffmpeg-{}\n'.format(' '.join(cmd)))
+        with codecs.open(log_output, 'w', 'utf-8') as f:
+            f.write(u'ffmpeg-{}\n'.format(' '.join(cmd)))
             if clip_resolution:
                 f.write('Input Resolution: height: {}, width: {}\n'.format(
                     clip_resolution.height, clip_resolution.width))

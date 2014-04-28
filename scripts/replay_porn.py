@@ -131,7 +131,7 @@ class ClipPlayer(object):
 segment_trackers = {
     'new': segment.PriorityRandomSegmentTracker,
     'existing': segment.ExistingSegmentTracker,
-    'sample': lambda fp, n: segment.CountSegmentTracker(fp, n, 10),
+    'sample': None,
 }
 
 clip_types = {
@@ -150,20 +150,25 @@ parser.add_argument('--clip-type', choices=clip_types.keys(), default='shuffle')
 parser.add_argument('--tracker', choices=segment_trackers.keys(), default='sample')
 parser.add_argument('--update-library', action='store_true', default=False)
 parser.add_argument('--extra', default='')
+parser.add_argument('--sample-size', default=10, type=int)
 ARGS = parser.parse_args()
+
+segment_trackers['sample'] = lambda fp, n: segment.CountSegmentTracker(fp, n, ARGS.sample_size)
+
 
 try:
     script.standardSetup()
     logging.info('****** Starting new script ********')
 
+    cmd_line_files = [f.decode('utf-8') for f in ARGS.files]
     if ARGS.update_library:
-        filepaths = movie.loadFiles(ARGS.files)
+        filepaths = movie.loadFiles(cmd_line_files)
     else:
         filepaths = []
-        for file_ in ARGS.files:
+        for file_ in cmd_line_files:
             some_filepaths = db.getSession().query(t.FilePath).filter(
                 (t.FilePath.hostname == util.hostname) &
-                (t.FilePath.path.like('{}%'.format(file_)))
+                (t.FilePath.path.like(u'{}%'.format(file_)))
             ).all()
             filepaths.extend(some_filepaths)
             #uniq_filepaths.update({fp.file_id: fp for fp in some_filepaths})

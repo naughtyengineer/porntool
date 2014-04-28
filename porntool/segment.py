@@ -141,10 +141,13 @@ class SegmentTracker(object):
         else:
             raise Exception('either target_fraction or count must be specified')
 
-        while condCheck():
+        # failed count is largely to catch small files that fill up
+        failed_count = 0
+        while condCheck() and failed_count < 10:
             start = round(random.random() * (pornfile.length - duration), 1)
             location, remaining = self.traverseGaps(rows, start, pornfile.length)
             if remaining < 1.5:
+                failed_count += 1
                 continue
             length = min(remaining, self.length())
             end = location + length

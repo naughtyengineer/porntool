@@ -1,7 +1,11 @@
 import argparse
+import collections
 import datetime
+import itertools
 import logging
+import random
 import os.path
+import subprocess
 
 from porntool import clippicker
 from porntool import db
@@ -15,16 +19,78 @@ from porntool import segment
 from porntool import tables as t
 from porntool import util
 
+Color = collections.namedtuple('Color', ['hex_code', 'name'])
+BLACK = Color('000000', 'black')
+WHITE = Color('ffffff', 'white')
+
 def ensureProperties(inventory):
     for fp in inventory:
         movie.updateMissingProperties(fp)
         yield fp
 
 
-def saveClips(clips, filename):
-    f = open(filename, 'w')
-    f.writelines(['{:05d}.mp4\n'.format(c.id_) for c in clips])
+def choseFilenames(image_filenames, solid_filenames, count):
+    all_filenames = image_filenames[:count]
+    if len(image_filenames) > count:
+        return all_filenames
 
+    n_solid = len(image_filenames) - count
+    picked_solids = [random.choice(solid_filenames) for _ in range(n_solid)]
+    for p in picked_solids:
+        all_filenames.insert(random.randint(len(all_filenames)), p)
+    return all_filenames
+
+
+def saveClips(clips, filename, image_filenames, solid_filenames):
+    f = open(filename, 'w')
+    clip_filenames = ['{:05d}.mp4'.format(c.id_) for c in clips]
+    image_clips = choseFilenames(image_filenames, solid_filenames, len(clips) - 1)
+    all_filenames = []
+    for clip, image in itertools.izip_longest(clip_filenames, image_clips):
+        all_filenames.append(clip)
+        if image:
+            all_filenames.append(image)
+    f.writelines('\n'.join(all_filenames))
+
+
+def makeSolidClips(output_dir, color, resolution, frame_lengths):
+    # first, use image magik to make a solid color
+    image_file_name = os.path.join(output_dir, '{}.png'.format(color.name))
+    subprocess.call('convert -size {}x{} xc:#{} {}'.format(
+        resolution.width, resolution.height, color.hex_code, image_file_name).split())
+    file_names = []
+    for length in frame_lengths:
+        movie_file_name = '{}-{:03d}.mp4'.format(color.name, length)
+        file_names.append(movie_file_name)
+        movie_file_path = os.path.join(output_dir, movie_file_name)
+        if os.path.exists(movie_file_path):
+            continue
+        cmd = ('ffmpeg -loop 1 -i'.split() +
+               [image_file_name] +
+               '-c:v libx264 -frames {} -r 30000/1001 -pix_fmt yuv420p'.format(length).split() +
+               [movie_file_path])
+        print cmd
+        subprocess.call(cmd)
+    return file_names
+
+
+def clipFromImage(output_dir, image_filename, resolution, frames):
+    basename = os.path.basename(image_filename)
+    tmp_filename = '/tmp/{}'.format(basename)
+    file_root, file_ext = os.path.splitext(basename)
+    another_name = file_root + ".mp4"
+    output_movie = os.path.join(output_dir, another_name)
+    convert_cmd = ['convert', image_filename, '-resize',
+                   '{}x{}^'.format(resolution.width, resolution.height), tmp_filename]
+    print convert_cmd
+    subprocess.call(convert_cmd)
+    cmd = ('ffmpeg -loop 1 -i'.split() +
+           [tmp_filename] +
+           '-c:v libx264 -frames {} -r 30000/1001 -pix_fmt yuv420p'.format(frames).split() +
+           [output_movie])
+    print cmd
+    subprocess.call(cmd)
+    return another_name
 
 def processClips(clips, output_dir, quick=False, resolution=None):
     duration = 0
@@ -75,6 +141,7 @@ parser.add_argument('--tracker', choices=segment_trackers.keys(), default='exist
 parser.add_argument('--extra', default='', help='extra args to pass to player')
 parser.add_argument('--quick', action='store_true', help='set to not reencode, just extract')
 parser.add_argument('--resolution')
+parser.add_argument('--images', nargs='*', help='images to insert between clips')
 ARGS = parser.parse_args()
 
 try:
@@ -120,9 +187,18 @@ try:
     else:
         resolution = None
 
-    playlist = os.path.join(ARGS.output, 'playlist.txt')
-    success = processClips(clips, ARGS.output, ARGS.quick, resolution)
-    saveClips(success, playlist)
+    playlist = os.path.join(ARGS.output, 'playlist-{}.txt'.format(
+        datetime.datetime.now().strftime('%Y%m%d%H%M')))
+    whites = makeSolidClips(ARGS.output, WHITE, resolution, [3, 3, 3,  4,  4,  5,  6,  7,  8])
+    blacks = makeSolidClips(ARGS.output, BLACK, resolution, [9, 9, 9, 10, 10, 11, 12, 13, 14])
+    if ARGS.images:
+        image_clip_filenames = []
+        for image in ARGS.images[:len(clips)]:
+            image_clip = clipFromImage(ARGS.output, image, resolution, random.randint(3, 15))
+            image_clip_filenames.append(image_clip)
+
+    extracted_clips = processClips(clips, ARGS.output, ARGS.quick, resolution)
+    saveClips(extracted_clips, playlist, image_clip_filenames, whites+blacks)
 
 finally:
     script.standardCleanup()
