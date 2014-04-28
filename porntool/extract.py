@@ -4,13 +4,14 @@ import logging
 import os
 import subprocess
 
+from porntool import configure
 from porntool import player
 
 logger = logging.getLogger(__name__)
 
 Resolution = collections.namedtuple('Resolution', ('width', 'height'))
-VIDEO = ['-vcodec', 'libx264', '-crf', '23', '-preset', 'medium', '-r', '30000/1001']
-AUDIO = ['-acodec', 'aac', '-strict', 'experimental', '-ac', '2', '-ar', '44100', '-ab', '128k']
+# VIDEO = ['-vcodec', 'libx264', '-crf', '23', '-preset', 'medium', '-r', '30000/1001']
+# AUDIO = ['-acodec', 'aac', '-strict', 'experimental', '-ac', '2', '-ar', '44100', '-ab', '128k']
 
 DEVNULL = open(os.devnull, 'w')
 
@@ -56,7 +57,7 @@ def extractClip(
         cmd += ['-vf', padAndScaleFilter(clip_resolution, target_resolution)]
 
     if reencode:
-        cmd = cmd + VIDEO + AUDIO
+        cmd = cmd + configure.get('VIDEO') + configure.get('AUDIO')
     else:
         cmd = cmd + ['-codec', 'copy']
 

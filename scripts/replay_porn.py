@@ -50,7 +50,8 @@ def inventoryFilter(inventory):
 
 
 def handleKey(key):
-    key = key.lower()
+    logging.debug(key)
+    #key = key.lower()
     logging.debug("'%s' was pressed", key)
     if CONTROLLER:
         CONTROLLER.consume(key)

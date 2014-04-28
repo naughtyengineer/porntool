@@ -112,7 +112,7 @@ class SlavePlayer(widget.OnFinished, widget.LoopAware):
         if not cmd:
             cmd = self.DEFAULT_CMD
         if geom is None:
-            geom = self.DEFAULT_GEOM
+            geom = configure.get('GEOMETRY')
         self.cmd = cmd.format(
             player=configure.get('MPLAYER'), extra=extra, geom=geom).split() + [filename]
         self.p = None
@@ -271,6 +271,8 @@ class SlavePlayer(widget.OnFinished, widget.LoopAware):
             self.togglePause()
 
     def seek(self, value, type_=SEEK_ABSOLUTE):
+        if value is None:
+            return
         now = self.getTime()
         self.saveScrub(now)
         if type_ == self.SEEK_ABSOLUTE:

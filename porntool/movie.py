@@ -16,6 +16,12 @@ logger = logging.getLogger(__name__)
 valid_mov_ext = [".avi", ".mpg", ".wmv", ".flv", ".mov", ".mp4",
                  ".vob", ".divx", ".mkv", ".m4v", ".mpeg"]
 
+
+def isMovie(filename):
+    ext = os.path.splitext(filename)[1]
+    return ext in valid_mov_ext
+
+
 def updateMissingProperties(file_path):
     moviefile = file_path.pornfile
     if moviefile.length is None:
@@ -23,6 +29,7 @@ def updateMissingProperties(file_path):
         mp.identify()
         logger.debug('Setting length on %s to %s', file_path, mp.length)
         moviefile.length = mp.length
+
 
 def addMovie(filename):
    # 2 << 17 = 256kb = 1/4 mb
@@ -41,13 +48,13 @@ def addMovie(filename):
     fp = tables.FilePath(path=filename, hostname=util.hostname)
     mf.paths.append(fp)
 
+
 def getMovie(filename, add_movie=None):
     if not os.path.exists(filename):
         logger.debug('%s does not exist', filename)
         return None
     ext = os.path.splitext(filename)[1]
-    base = os.path.basename(filename)
-    if ext not in valid_mov_ext:
+    if not isMovie(filename):
         return None
     session = db.getSession()
     # need to search to see if this path exists
@@ -77,6 +84,8 @@ def checkAndAddFile(abspath, filepath_list, add_movie):
 
 
 def loadFiles(files=None, add_movie=None):
+    if isinstance(files, basestring):
+        files = [files]
     if not files:
         return db.getSession().query(tables.FilePath).join(tables.MovieFile).filter(
             tables.FilePath.hostname==util.hostname).all()
@@ -84,7 +93,6 @@ def loadFiles(files=None, add_movie=None):
         filepath_list = []
         for file_ in files:
             file_ = file_.decode('utf-8')
-            logging.debug('Adding %s', file_)
             abspath = os.path.abspath(file_)
             checkAndAddFile(abspath, filepath_list, add_movie)
         return filepath_list
