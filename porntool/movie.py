@@ -13,13 +13,11 @@ from porntool import player
 
 logger = logging.getLogger(__name__)
 
-valid_mov_ext = [".avi", ".mpg", ".wmv", ".flv", ".mov", ".mp4",
-                 ".vob", ".divx", ".mkv", ".m4v", ".mpeg"]
 
 
 def isMovie(filename):
     ext = os.path.splitext(filename)[1]
-    return ext in valid_mov_ext
+    return ext in util.valid_mov_ext
 
 
 def updateMissingProperties(file_path):
@@ -107,7 +105,7 @@ class MovieInventory(object):
         self.filepaths = filepaths
         self.shuffle = shuffle
         self.current_movie = 0
-        basic_filters = basic_filters if basic_filters else [filters.Exists()]
+        basic_filters = basic_filters if basic_filters else [filters.Exists(), filters.IsMovie()]
         self.filters = basic_filters + (extra_filters if extra_filters else [])
 
     def __iter__(self):

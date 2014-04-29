@@ -178,7 +178,7 @@ try:
 
     inventory = movie.MovieInventory(
         filepaths, ARGS.shuffle,
-        [filters.Exists(),
+        [filters.Exists(), filters.IsMovie(),
          #filters.ByMinCount(db.getSession(), 1),
          filters.ExcludeTags(['pmv', 'cock.hero'])])
 

@@ -6,6 +6,7 @@ import os.path
 import sqlalchemy as sql
 
 from porntool import tables as t
+from porntool import util
 
 logger = logging.getLogger(__name__)
 
@@ -33,13 +34,18 @@ def _play_recentrating(count, rating, last):
     print "Prob = %s, Random = %s" % (prob, rnd)
     return  rnd < (prob)
 
-class RatingRecent(object):
-    def __call__(self, movie):
-        return _play_recentrating(movie.count, movie.rating, movie.last)
+# class RatingRecent(object):
+#     def __call__(self, movie):
+#         return _play_recentrating(movie.count, movie.rating, movie.last)
 
 class Exists(object):
     def __call__(self, filepath):
         return os.path.exists(filepath.path)
+
+class IsMovie(object):
+    def __call__(self, filepath):
+        ext = os.path.splitext(filepath.path)[1]
+        return ext in util.valid_mov_ext
 
 class IncludeTags(object):
     def __init__(self, tags):

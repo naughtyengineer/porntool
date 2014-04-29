@@ -16,7 +16,13 @@ _dot = hostname.find('.')
 if _dot > 0:
     hostname = hostname[:_dot]
 
+
 DEVNULL = open(os.devnull, 'w')
+
+
+valid_mov_ext = [".avi", ".mpg", ".wmv", ".flv", ".mov", ".mp4",
+                 ".vob", ".divx", ".mkv", ".m4v", ".mpeg"]
+
 
 def flexibleBoolean(x):
     x = x.lower()
