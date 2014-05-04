@@ -48,14 +48,20 @@ class SegmentTracker(object):
                 sorted_rows.append(PotentialClip(start, end, priority))
                 sorted_rows.sort()
 
-    def traverseGaps(self, rows, start, movie_end):
-        """
-        `start` is in 'gap terms', not absolute terms. so, if start
-        is 10 seconds - it means ten seconds worth of gap if the
-        first minute is already in `rows`, then the start would
-        actually be 1:10.
+    def traverseGaps(self, rows, start, movie_end, margin=0):
+        """Find a place for a new clip that doesn't overlap with existing clips
 
-        return: (location in absolute terms, remaining duration in the current gap)
+        Args:
+            rows: current clips
+            start: time to start the new clip. `start` is in 'gap
+                terms', not absolute terms. so, if start is 10 seconds
+                - it means ten seconds worth of gap if the first
+                minute is already in `rows`, then the start would
+                actually be 1:10.
+            movie_end: total length of the movie
+            margin: buffer around each existing clip to not allow new ones
+
+        Returns: (location in absolute terms, remaining duration in the current gap)
         """
         if not rows:
             return start, movie_end - start
@@ -63,18 +69,25 @@ class SegmentTracker(object):
         last_end = 0
         gap_found = False
         for pc in rows:
-            current_gap = pc.start - last_end
+            margined_start = pc.start - margin
+            # have to take the maximum because it is possible that
+            # (start - margin) < ((end of previous clip) + margin)
+            # in which case we don't want a negative gap.
+            current_gap = max(margined_start - last_end, 0)
             if total_gaps <= start < (total_gaps + current_gap):
                 # the target location is in this gap!
                 gap_found = True
                 break
             total_gaps += current_gap
-            last_end = pc.end
+            last_end = pc.end + margin
+
         location = last_end + (start - total_gaps)
         if gap_found:
-            remaining = pc.start - location
+            remaining = margined_start - location
         else:
-            remaining = movie_end - location
+            # its possible that (endprevious clip + margin) > movie_end
+            # so just want to return that there is 0 remaining
+            remaining = max(movie_end - location, 0)
         return location, remaining
 
     def addRowsByFlag(self, rows):
@@ -136,25 +149,33 @@ class SegmentTracker(object):
             def condCheck():
                 return duration / pornfile.length < target_fraction
         elif count:
+            logger.info('Current rows: %s, target: %s for %s', len(rows), count, self)
             def condCheck():
                 return len(rows) < count
         else:
             raise Exception('either target_fraction or count must be specified')
 
-        # failed count is largely to catch small files that fill up
-        failed_count = 0
-        while condCheck() and failed_count < 10:
-            start = round(random.random() * (pornfile.length - duration), 1)
-            location, remaining = self.traverseGaps(rows, start, pornfile.length)
-            if remaining < 1.5:
-                failed_count += 1
-                continue
-            length = min(remaining, self.length())
-            end = location + length
-            # don't need to check this, know its in a gap
-            rows.append(PotentialClip(location, end, 2))
-            rows.sort()
-            duration += length
+        # we first try large margins, and if that fails a lot
+        # we reduce the margin and try again, and again, and again
+        existing_rows = len(rows)
+        for margin in (120, 60, 30, 10, 0):
+            if not condCheck():
+                break
+            failed_count = 0
+            while condCheck() and failed_count < 10:
+                start = round(random.random() * (pornfile.length - duration), 1)
+                location, remaining = self.traverseGaps(rows, start, pornfile.length, margin)
+                if remaining < 1.5:
+                    failed_count += 1
+                    continue
+                length = min(remaining, self.length())
+                end = location + length
+                # don't need to check this, know its in a gap
+                rows.append(PotentialClip(location, end, 2))
+                rows.sort()
+                duration += length
+            logger.debug('For margin %s, found %s rows', margin, len(rows) - existing_rows)
+            existing_rows = len(rows)
 
     def getRows(self):
         pornfile = self.filepath.pornfile
@@ -215,14 +236,7 @@ class SegmentTracker(object):
         return None
 
 
-class ExistingSegmentTracker(SegmentTracker):
-    def __init__(self, filepath, ratings):
-        SegmentTracker.__init__(self, filepath, ratings)
-        self.current_row = 0
-        self.clips = sorted(
-            [c for c in self.filepath.pornfile.clips if c.active],
-            key=lambda c: c.start)
-
+class InOrder(SegmentTracker):
     def getRows(self):
         return []
 
@@ -230,6 +244,22 @@ class ExistingSegmentTracker(SegmentTracker):
         row = self.current_row
         self.current_row += 1
         return self.clips[row] if row < len(self.clips) else None
+
+
+class ExistingSegmentTracker(InOrder):
+    def __init__(self, filepath, ratings):
+        SegmentTracker.__init__(self, filepath, ratings)
+        self.current_row = 0
+        self.clips = sorted(
+            [c for c in self.filepath.pornfile.clips if c.active],
+            key=lambda c: c.start)
+
+
+class AllExistingSegmentTracker(InOrder):
+    def __init__(self, filepath, ratings):
+        SegmentTracker.__init__(self, filepath, ratings)
+        self.current_row = 0
+        self.clips = sorted([self.filepath.pornfile.clips], key=lambda c: c.start)
 
 
 class RandomExistingSegmentTracker(ExistingSegmentTracker):
@@ -272,7 +302,10 @@ class CountSegmentTracker(RandomSegmentTracker):
         rows = [PotentialClip(c.start, c.end, 0) for c in
                 sorted(pornfile.clips, key=lambda clip: clip.start)]
 
-        self.addRowsUniform(rows, count=self.n)
-
-        logger.debug('Done getting rows for %s', self)
-        return rows
+        if len(rows) < self.n:
+            self.addRowsUniform(rows, count=self.n)
+            logger.debug('Done getting rows for %s', self)
+            return rows
+        else:
+            logger.debug('%s is already done.  Returning empty rows', self)
+            return []

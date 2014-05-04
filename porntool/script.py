@@ -38,6 +38,14 @@ class LockFile():
 LOCK_FILE = None
 
 def standardSetup(echo=False, file_handler=True, copy_db=True):
+    """Utility function to setup up the configuration, logging and database
+
+    Args:
+        echo: enable sqlalchemy db echoing
+        file_handler: log to a file if True, log to screen if False
+        copy_db: write changes to a copy of the database, which upon cleanup replaces
+            the existing one
+    """
     global SQL_FILE, TMP_FILE, COPIED, LOCK_FILE
     configure.load()
     util.configureLogging(file_handler=file_handler)

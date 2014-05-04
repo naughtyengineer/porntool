@@ -50,9 +50,6 @@ def inventoryFilter(inventory):
 
 
 def handleKey(key):
-    logging.debug(key)
-    #key = key.lower()
-    logging.debug("'%s' was pressed", key)
     if CONTROLLER:
         CONTROLLER.consume(key)
 
@@ -132,6 +129,7 @@ class ClipPlayer(object):
 segment_trackers = {
     'new': segment.PriorityRandomSegmentTracker,
     'existing': segment.ExistingSegmentTracker,
+    # 'sample' depends on a cmd line argument
     'sample': None,
 }
 

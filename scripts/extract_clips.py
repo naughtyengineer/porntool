@@ -34,10 +34,12 @@ def choseFilenames(image_filenames, solid_filenames, count):
     if len(image_filenames) > count:
         return all_filenames
 
-    n_solid = len(image_filenames) - count
+    n_solid = count - len(image_filenames)
     picked_solids = [random.choice(solid_filenames) for _ in range(n_solid)]
+    logging.debug('n_solid: %s, len(picked_solids): %s', n_solid, len(picked_solids))
     for p in picked_solids:
-        all_filenames.insert(random.randint(len(all_filenames)), p)
+        all_filenames.insert(random.randint(0, len(all_filenames)), p)
+    logging.debug('Using %s images', len(all_filenames))
     return all_filenames
 
 
@@ -50,6 +52,8 @@ def saveClips(clips, filename, image_filenames, solid_filenames):
         all_filenames.append(clip)
         if image:
             all_filenames.append(image)
+        else:
+            logging.debug('Image is None')
     f.writelines('\n'.join(all_filenames))
 
 
@@ -145,7 +149,7 @@ parser.add_argument('--images', nargs='*', help='images to insert between clips'
 ARGS = parser.parse_args()
 
 try:
-    script.standardSetup()
+    script.standardSetup(copy_db=False, file_handler=False)
     logging.info('****** Starting new script ********')
 
     filepaths = []
@@ -191,8 +195,10 @@ try:
         datetime.datetime.now().strftime('%Y%m%d%H%M')))
     whites = makeSolidClips(ARGS.output, WHITE, resolution, [3, 3, 3,  4,  4,  5,  6,  7,  8])
     blacks = makeSolidClips(ARGS.output, BLACK, resolution, [9, 9, 9, 10, 10, 11, 12, 13, 14])
+    logging.debug('len(whites) = %s', len(whites))
+    logging.debug('len(blacks) = %s', len(blacks))
+    image_clip_filenames = []
     if ARGS.images:
-        image_clip_filenames = []
         for image in ARGS.images[:len(clips)]:
             image_clip = clipFromImage(ARGS.output, image, resolution, random.randint(3, 15))
             image_clip_filenames.append(image_clip)

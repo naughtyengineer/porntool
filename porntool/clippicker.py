@@ -13,27 +13,34 @@ class ClipPicker(object):
         self.current_tracker = None
 
     def _newTracker(self):
-        fp = next(self.iinventory)
+        while True:
+            try:
+                fp = next(self.iinventory)
+                break
+            except StopIteration:
+                logger.info('All out of trackers!')
+                raise
+            except:
+                logger.exception('Failed trying to get next tracker')
+        logger.debug('Loading next tracker using %s', fp)
         s = self.tracker_factory(fp, self.ratings)
         return s
 
     def addTrackers(self, n=1):
         for _ in range(n):
             try:
-                self.trackers.append(self._newTracker())
+                t = self._newTracker()
+                logger.debug('Adding tracker: %s', t)
+                self.trackers.append(t)
             except StopIteration:
                 break
+        logger.debug('There are now %s trackers', len(self.trackers))
 
     def removeTracker(self, tracker=None):
         tracker = tracker or self.current_tracker
         logger.debug('Removing tracker: %s', tracker)
         self.trackers.remove(tracker)
-        try:
-            t = self._newTracker()
-            logger.debug('Adding tracker: %s', t)
-            self.trackers.append(t)
-        except StopIteration:
-            pass
+        self.addTrackers()
 
     def _nextTracker(self):
         return min(self.trackers, key=lambda t: t.checkedDuration())

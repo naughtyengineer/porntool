@@ -23,8 +23,6 @@ def flexibleBoolean(x):
     raise pt.PorntoolException('Invalid boolean argument')
 
 def handleKey(key):
-    key = key.lower()
-    logging.debug("'%s' was pressed", key)
     if CONTROLLER:
         CONTROLLER.consume(key)
 
@@ -67,6 +65,7 @@ parser.add_argument('--shuffle', default=True, type=flexibleBoolean)
 parser.add_argument('--max-count', type=int)
 parser.add_argument('--min-count', type=int)
 parser.add_argument('--include_tags', nargs="+")
+parser.add_argument('--exclude_tags', nargs="+")
 args = parser.parse_args()
 
 script.standardSetup()
@@ -83,8 +82,11 @@ try:
     if args.max_count is not None:
         all_filters.append(filters.ByMaxCount(db.getSession(), args.max_count))
 
+    if args.include_tags:
+        all_filters.append(filters.IncludeTags(args.include_tags))
 
-    tag_filter = filters.IncludeTags(args.include_tags) if args.include_tags else None
+    if args.exclude_tags:
+        all_filters.append(filters.ExcludeTags(args.exclude_tags))
 
     inventory = movie.MovieInventory(filepaths, args.shuffle, all_filters)
     iinventory = iter(inventory)
