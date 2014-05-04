@@ -24,6 +24,10 @@ from porntool import tables as t
 from porntool import util
 from porntool import widget
 
+LOOP = None
+CONTROLLER = None
+SKIPPED = []
+
 
 def is1080(filepath):
     mp = player.MoviePlayer(filepath)
@@ -45,7 +49,11 @@ def inventoryFilter(inventory):
         #     logging.debug('Skipping %s:  too high def', fp)
         #     continue
         # a bit of a hack, sorry
-        movie.updateMissingProperties(fp)
+        try:
+            movie.updateMissingProperties(fp)
+        except:
+            logging.exception('Skipping %s. Failed to update properties.', fp)
+            continue
         yield fp
 
 
@@ -108,8 +116,10 @@ class ClipPlayer(object):
                     fmp.clip.active = 0
                 db.getSession().commit()
             if hasattr(fmp, 'skip') and fmp.skip:
+                logging.debug('Skipping file')
                 db.getSession().delete(fmp.clip)
                 self.clip_picker.removeTracker()
+                SKIPPED.append(self.clip_picker.current_tracker.filepath)
             if hasattr(fmp, 'add') and fmp.add:
                 self.clip_picker.addTrackers(fmp.add)
         try:
@@ -124,6 +134,12 @@ class ClipPlayer(object):
                 raise urwid.ExitMainLoop()
         self.setupController(clip)
 
+
+def printSkippedFiles():
+    if SKIPPED:
+        print 'You skipped these files:'
+    for fp in SKIPPED:
+        print fp.path
 
 
 segment_trackers = {
@@ -194,11 +210,12 @@ try:
 
     # bold is needed for the AdjustController
     palette = [('bold', 'default,bold', 'default', 'bold'),]
-    LOOP = urwid.MainLoop(FILL, palette=palette, unhandled_input=handleKey)
+    LOOP = urwid.MainLoop(FILL, palette=palette, unhandled_input=handleKey, handle_mouse=False)
 
     LOOP.set_alarm_in(1, clip_player.playNextClip)
 
     LOOP.run()
 finally:
     script.standardCleanup()
+    printSkippedFiles()
     logging.info('****** End of Script *********')

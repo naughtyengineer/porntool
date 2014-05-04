@@ -95,7 +95,7 @@ try:
     CONTROLLER = None
 
     fill = reviewer.UrwidReviewWidget(valign='bottom')
-    loop = urwid.MainLoop(fill, unhandled_input=handleKey)
+    loop = urwid.MainLoop(fill, unhandled_input=handleKey, handle_mouse=False)
 
     loop.set_alarm_in(1, nextMovie)
     loop.run()
