@@ -72,7 +72,7 @@ def adjustClip(clip_menu):
     CONTROLLER.setLoop(LOOP.event_loop)
     CONTROLLER.addFinishedHandler(editClip, clip=clip, clip_player=CLIP_PLAYER)
     CONTROLLER.start()
-    CONTROLLER.player.communicate('volume 10 1')
+    #CONTROLLER.player.communicate('volume 10 1')
 
 
 def editClip(clip, clip_player):
@@ -102,7 +102,7 @@ class ClipPlayer(object):
                 self.playNextClip()
             else:
                 editClip(clip, self)
-        CONTROLLER.player.communicate('volume 10 1')
+        #CONTROLLER.player.communicate('volume 10 1')
         CONTROLLER.player.seekAndPlay(
             start=clip.start, duration=clip.duration, onFinished=finish)
 
@@ -196,7 +196,7 @@ try:
         filepaths, ARGS.shuffle,
         [filters.Exists(), filters.IsMovie(),
          #filters.ByMinCount(db.getSession(), 1),
-         filters.ExcludeTags(['pmv', 'cock.hero'])])
+         filters.ExcludeTags(['pmv', 'cock.hero', 'compilation'])])
 
     iinventory = inventoryFilter(inventory)
 
