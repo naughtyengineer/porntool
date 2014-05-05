@@ -26,7 +26,9 @@ from porntool import widget
 
 LOOP = None
 CONTROLLER = None
+CLIP_PLAYER = None
 SKIPPED = []
+COUNTER = 0
 
 
 def is1080(filepath):
@@ -68,14 +70,14 @@ def adjustClip(clip_menu):
     LOOP.widget = FILL
     CONTROLLER = controller.AdjustController(clip, FILL)
     CONTROLLER.setLoop(LOOP.event_loop)
-    CONTROLLER.addFinishedHandler(editClip, clip=clip)
+    CONTROLLER.addFinishedHandler(editClip, clip=clip, clip_player=CLIP_PLAYER)
     CONTROLLER.start()
     CONTROLLER.player.communicate('volume 10 1')
 
 
-def editClip(clip):
+def editClip(clip, clip_player):
     logging.debug('Starting editClip')
-    main = menu.ClipMenuPadding(clip, adjustClip)
+    main = menu.ClipMenuPadding(clip, adjustClip, '({}) '.format(clip_player.clip_picker.counter))
     main.setLoop(LOOP.event_loop)
     main.addFinishedHandler(clip_player.playNextClip, fmp=main)
     LOOP.widget = urwid.Overlay(
@@ -99,7 +101,7 @@ class ClipPlayer(object):
             if ARGS.no_edit:
                 self.playNextClip()
             else:
-                editClip(clip)
+                editClip(clip, self)
         CONTROLLER.player.communicate('volume 10 1')
         CONTROLLER.player.seekAndPlay(
             start=clip.start, duration=clip.duration, onFinished=finish)
@@ -204,7 +206,7 @@ try:
     segment_tracker = segment_trackers[ARGS.tracker]
     clip_type = clip_types[ARGS.clip_type]
     clip_picker = clip_type(iinventory, normalratings, ARGS.nfiles, segment_tracker)
-    clip_player = ClipPlayer(clip_picker)
+    CLIP_PLAYER = ClipPlayer(clip_picker)
 
     FILL = widget.Status(valign='bottom')
 
@@ -212,7 +214,7 @@ try:
     palette = [('bold', 'default,bold', 'default', 'bold'),]
     LOOP = urwid.MainLoop(FILL, palette=palette, unhandled_input=handleKey, handle_mouse=False)
 
-    LOOP.set_alarm_in(1, clip_player.playNextClip)
+    LOOP.set_alarm_in(1, CLIP_PLAYER.playNextClip)
 
     LOOP.run()
 finally:

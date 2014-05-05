@@ -11,6 +11,7 @@ class ClipPicker(object):
         self.trackers = []
         self.addTrackers(n)
         self.current_tracker = None
+        self.counter = 0
 
     def _newTracker(self):
         while True:
@@ -56,6 +57,7 @@ class ClipPicker(object):
         if not clip:
             self.removeTracker(tracker)
             return self.getNextClip()
+        self.counter += 1
         return clip
 
 
