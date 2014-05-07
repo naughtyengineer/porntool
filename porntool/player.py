@@ -100,7 +100,7 @@ class SlavePlayer(widget.OnFinished, widget.LoopAware):
         if not cmd:
             cmd = self.DEFAULT_CMD
         if geom is None:
-            geom = configure.get('GEOMETRY', DEFAULT_GEOM)
+            geom = configure.get('GEOMETRY')
         self.cmd = cmd.format(
             player=configure.get('MPLAYER'), extra=extra, geom=geom).split() + [filename]
         self.p = None
