@@ -6,15 +6,16 @@ import sqlalchemy as sql
 from porntool import tables as t
 
 SMART_CUTOFFS = False
-logger = logging.getLogger(__name__)
 try:
     import numpy as np
     from scipy import stats
     from scipy import optimize
     SMART_CUTOFFS = True
 except ImportError:
-    logger.warning('Failed to import numpy or scipy, some features will be disabled')
+    # would log, but unlikely that any handlers are setup yet
+    print('Failed to import numpy or scipy, some features will be disabled')
 
+logger = logging.getLogger(__name__)
 
 class Ratings(object):
     def getRating(self, moviefile):
@@ -90,11 +91,14 @@ class NormalRatings(Ratings):
         )
         rows = self.session.execute(query).fetchall()
         raw_ratings = [self._rawRating(*r[1:]) for r in rows]
-        if SMART_CUTOFFS:
+        if SMART_CUTOFFS and len(raw_ratings) > 20:
             self.cutoffs = calculate_cutoffs(raw_ratings, self.target_mean, self.fraction_tens)
         else:
             # do linear ratings instead
-            max_rating = int(max(raw_ratings))
+            if raw_ratings:
+                max_rating = max(int(max(raw_ratings)), 100)
+            else:
+                max_rating = 100
             step = int(max_rating / 11)
             self.cutoffs = range(0, max_rating, step)
 
