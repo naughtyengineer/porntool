@@ -59,7 +59,7 @@ class NormalRatings(Ratings):
         self.fraction_tens = fraction_tens
         self.target_mean = target_mean
         self._load()
-        asset len(self.cutoffs) == 11
+        assert len(self.cutoffs) == 11
 
     def _rawRatingInfo(self, moviefile):
         query = sql.select(

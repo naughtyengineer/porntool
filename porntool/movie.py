@@ -45,6 +45,7 @@ def addMovie(filename):
         raise
     fp = tables.FilePath(path=filename, hostname=util.hostname)
     mf.paths.append(fp)
+    return fp
 
 
 def getMovie(filename, add_movie=None):
