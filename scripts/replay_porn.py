@@ -174,6 +174,7 @@ try:
         #filepaths = uniq_filepaths.values()
     logging.debug('filepaths: %s', len(filepaths))
     db.getSession().commit()
+    logging.debug('%s files loaded', len(filepaths))
 
     inventory = movie.MovieInventory(
         filepaths, ARGS.shuffle,
