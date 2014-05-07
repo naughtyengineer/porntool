@@ -59,6 +59,7 @@ class NormalRatings(Ratings):
         self.fraction_tens = fraction_tens
         self.target_mean = target_mean
         self._load()
+        asset len(self.cutoffs) == 11
 
     def _rawRatingInfo(self, moviefile):
         query = sql.select(
@@ -99,8 +100,8 @@ class NormalRatings(Ratings):
                 max_rating = max(int(max(raw_ratings)), 100)
             else:
                 max_rating = 100
-            step = int(max_rating / 11)
-            self.cutoffs = range(0, max_rating, step)
+            step = int(max_rating / 10)
+            self.cutoffs = range(0, max_rating + 1, step)
 
     def getRating(self, moviefile):
         try:
