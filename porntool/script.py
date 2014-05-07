@@ -24,7 +24,7 @@ class LockFile():
     def lock(self):
         if os.path.exists(self.lockfile):
             self.delete = False
-            raise Exception('Database lockfile already exists')
+            raise Exception('Database lockfile (%s) already exists', self.lockfile)
         with open(self.lockfile, 'w'):
             pass
 

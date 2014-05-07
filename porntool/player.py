@@ -8,6 +8,7 @@ import time
 from porntool import async_subprocess
 from porntool import configure
 from porntool import db
+from porntool import identifym
 from porntool import tables
 from porntool import util
 from porntool import widget
@@ -33,26 +34,13 @@ class MoviePlayer(object):
         if check_cache and identify:
             out = identify.output
         else:
-            out = util.identify(self.filename)
+            out = identifym.identify(self.filename)
             if save_to_cache:
                 identify = tables.Identify(
                     file_id = self.filepath.pornfile.id_, output=out)
                 self.filepath.pornfile.identify = identify
-
-        video_height_m = re.search("ID_VIDEO_HEIGHT=(\d*)", out)
-        video_width_m = re.search("ID_VIDEO_WIDTH=(\d*)", out)
-        self.height = float(video_height_m.groups()[0])
-        self.width = float(video_width_m.groups()[0])
-
-        seekable = re.search("ID_SEEKABLE=(\d*)", out)
-        self.seekable = True if seekable.groups()[0] == '1' else False
-
-        self.length = float(re.search("ID_LENGTH=([\d\.]*)", out).groups()[0])
-
-        for line in out.split('\n'):
-            m = re.search("ID_(\w)=([^\s]+)", line)
-            if m:
-                setattr(self, m.group(1).lower(), m.group(2))
+        id_ = identifym.Identify(out)
+        self.__dict__.update(id_.__dict__)
 
     def start(self, *args):
         cmd = "{} --really-quiet".format(configure.get('MPLAYER')).strip().split()

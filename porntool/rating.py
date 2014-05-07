@@ -3,13 +3,18 @@ import logging
 
 import sqlalchemy as sql
 
-import numpy as np
-from scipy import stats
-from scipy import optimize
-
 from porntool import tables as t
 
+SMART_CUTOFFS = False
 logger = logging.getLogger(__name__)
+try:
+    import numpy as np
+    from scipy import stats
+    from scipy import optimize
+    SMART_CUTOFFS = True
+except ImportError:
+    logger.warning('Failed to import numpy or scipy, some features will be disabled')
+
 
 class Ratings(object):
     def getRating(self, moviefile):
@@ -27,6 +32,12 @@ def find_stddev(total, mean, target_tens):
 
 
 def calculate_cutoffs(raw_rating_values, mean, fraction_tens):
+    """returns an array of 11 values, each value is the upper-bound
+    of the raw score for the rating with the same index value.  In other words,
+    anything with a rating less than the 0th entry, gets a rating of 0.
+
+    The last value isn't necessary but, well, whatever. Shut-up.
+    """
     raw_rating_values = np.array(raw_rating_values)
     total = len(raw_rating_values)
     target_tens = total * fraction_tens
@@ -79,7 +90,13 @@ class NormalRatings(Ratings):
         )
         rows = self.session.execute(query).fetchall()
         raw_ratings = [self._rawRating(*r[1:]) for r in rows]
-        self.cutoffs = calculate_cutoffs(raw_ratings, self.target_mean, self.fraction_tens)
+        if SMART_CUTOFFS:
+            self.cutoffs = calculate_cutoffs(raw_ratings, self.target_mean, self.fraction_tens)
+        else:
+            # do linear ratings instead
+            max_rating = int(max(raw_ratings))
+            step = int(max_rating / 11)
+            self.cutoffs = range(0, max_rating, step)
 
     def getRating(self, moviefile):
         try:

@@ -75,12 +75,3 @@ def configureLogging(level=logging.DEBUG, file_handler=True):
     logging.getLogger('urwid').setLevel('WARNING')
 
 
-def identify(filename):
-    logger.debug('Calling `identify` on %s', filename)
-    p = subprocess.Popen(
-        [configure.get('MPLAYER'), "--vo=null", "--ao=null", "--identify",
-         "--frames=0", filename],
-        stdout=subprocess.PIPE, stderr=DEVNULL)
-    (out, err) = p.communicate()
-    out = out.decode('utf-8')
-    return out

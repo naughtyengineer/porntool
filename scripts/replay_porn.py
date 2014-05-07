@@ -44,9 +44,9 @@ def inventoryFilter(inventory):
         # if fp.path.find('empornium') >= 0:
         #     continue
         logging.debug('Checking %s', fp)
-        # if os.path.splitext(fp.path)[1] != '.mp4':
-        #     logging.debug('Skipping %s: not an mp4 file', fp)
-        #     continue
+        if os.path.splitext(fp.path)[1] != '.mp4':
+            logging.debug('Skipping %s: not an mp4 file', fp)
+            continue
         # if is1080(fp):
         #     logging.debug('Skipping %s:  too high def', fp)
         #     continue
