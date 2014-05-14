@@ -20,6 +20,7 @@ from porntool import rating
 from porntool import reviewer
 from porntool import script
 from porntool import segment
+from porntool import select
 from porntool import tables as t
 from porntool import util
 from porntool import widget
@@ -144,33 +145,14 @@ def printSkippedFiles():
         print fp.path
 
 
-segment_trackers = {
-    'new': segment.PriorityRandomSegmentTracker,
-    'existing': segment.ExistingSegmentTracker,
-    # 'sample' depends on a cmd line argument
-    'sample': None,
-}
 
-clip_types = {
-    'least': clippicker.ClipPicker,
-    'shuffle': clippicker.RandomClipPicker,
-    'new': clippicker.OnlyNewClips,
-}
-
-parser = argparse.ArgumentParser(description='Play your porn collection')
+parser = argparse.ArgumentParser(description='Play your porn collection', parents=[select.parser])
 parser.add_argument('files', nargs='*', help='files to play; play entire collection if omitted')
-parser.add_argument('--shuffle', default=True, type=util.flexibleBoolean)
-parser.add_argument(
-    '-n', '--nfiles', default=20, type=int, help='number of files to rotate through')
+parser.add_argument('--shuffle', default=True, type=util.flexibleBoolean, help='shuffle file list')
 parser.add_argument('--no-edit', action='store_true', default=False)
-parser.add_argument('--clip-type', choices=clip_types.keys(), default='shuffle')
-parser.add_argument('--tracker', choices=segment_trackers.keys(), default='sample')
 parser.add_argument('--update-library', action='store_true', default=False)
 parser.add_argument('--extra', default='')
-parser.add_argument('--sample-size', default=10, type=int)
 ARGS = parser.parse_args()
-
-segment_trackers['sample'] = lambda fp, n: segment.CountSegmentTracker(fp, n, ARGS.sample_size)
 
 
 try:
@@ -203,8 +185,8 @@ try:
     normalratings = rating.NormalRatings(db.getSession())
     CONTROLLER = None
 
-    segment_tracker = segment_trackers[ARGS.tracker]
-    clip_type = clip_types[ARGS.clip_type]
+    segment_tracker = select.getSegmentTrackerType(ARGS)
+    clip_type = select.getClipPickerType(ARGS)
     clip_picker = clip_type(iinventory, normalratings, ARGS.nfiles, segment_tracker)
     CLIP_PLAYER = ClipPlayer(clip_picker)
 

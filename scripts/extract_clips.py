@@ -7,7 +7,6 @@ import random
 import os.path
 import subprocess
 
-from porntool import clippicker
 from porntool import db
 from porntool import extract
 from porntool import filters
@@ -15,7 +14,7 @@ from porntool import movie
 from porntool import player
 from porntool import rating
 from porntool import script
-from porntool import segment
+from porntool import select
 from porntool import tables as t
 from porntool import util
 
@@ -111,7 +110,7 @@ def processClips(clips, output_dir, quick=False, resolution=None):
             continue
         input_ = fp.path
         mp = player.identify(fp) if not quick else None
-        if not extract.extractClip(clip, output, resolution, mp, cleanup=False, reencode=True):
+        if not extract.extractClip(clip, output, resolution, mp, cleanup=False):
             continue
         #if not extract.testExtraction(output):
         #    continue
@@ -121,27 +120,13 @@ def processClips(clips, output_dir, quick=False, resolution=None):
         success.append(clip)
     return success
 
-segment_trackers = {
-    'new': segment.PriorityRandomSegmentTracker,
-    'existing': segment.ExistingSegmentTracker,
-    'sample': lambda fp, n: segment.CountSegmentTracker(fp, n, 10),
-}
 
-clip_types = {
-    'least': clippicker.ClipPicker,
-    'shuffle': clippicker.RandomClipPicker,
-    'new': clippicker.OnlyNewClips,
-}
-
-parser = argparse.ArgumentParser(description='Extract clips from porn collection')
+parser = argparse.ArgumentParser(description='Extract clips from porn collection',
+                                 parents=[select.parser])
 parser.add_argument('files', nargs='+', help='files to play; play entire collection if omitted')
 parser.add_argument('--output', help='directory for output', default='.')
 parser.add_argument('--time', default=10, type=int, help="minutes of clips to extract")
 parser.add_argument('--shuffle', default=True, type=util.flexibleBoolean)
-parser.add_argument(
-    '-n', '--nfiles', default=20, type=int, help='number of files to rotate through')
-parser.add_argument('--clip-type', choices=clip_types.keys(), default='shuffle')
-parser.add_argument('--tracker', choices=segment_trackers.keys(), default='existing')
 parser.add_argument('--extra', default='', help='extra args to pass to player')
 parser.add_argument('--quick', action='store_true', help='set to not reencode, just extract')
 parser.add_argument('--resolution')
@@ -168,8 +153,8 @@ try:
 
     normalratings = rating.NormalRatings(db.getSession())
 
-    segment_tracker = segment_trackers[ARGS.tracker]
-    clip_type = clip_types[ARGS.clip_type]
+    segment_tracker = select.getSegmentTrackerType(ARGS)
+    clip_type = select.getClipPickerType(ARGS)
     clip_picker = clip_type(inventory, normalratings, ARGS.nfiles, segment_tracker)
 
     target_time = ARGS.time * 60

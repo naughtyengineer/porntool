@@ -62,12 +62,13 @@ def getMovie(filename, add_movie=None):
             tables.FilePath.path==filename, tables.FilePath.hostname==util.hostname).one()
         return fp
     except sql.NoResultFound:
-        logger.debug('No filepath found for %s:%s', util.hostname, filename)
+        if not add_movie:
+            logger.debug('No filepath found for %s:%s', util.hostname, filename)
+            return None
+        logger.debug('Adding new filepath for %s:%s', util.hostname, filename)
+        fp = add_movie(filename)
+        return fp
 
-    if not add_movie:
-        return None
-    fp = add_movie(filename)
-    return fp
 
 
 def checkAndAddFile(abspath, filepath_list, add_movie):

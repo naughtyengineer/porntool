@@ -42,7 +42,7 @@ def padAndScaleFilter(input_resolution, output_resolution):
 
 def extractClip(
         clip, output, target_resolution=None, clip_resolution=None,
-        cleanup=True, reencode=False):
+        cleanup=True):
     input_ = clip.moviefile.getActivePath().path
     # seeking before input uses keyframes
     preseek = max(clip.start - 10, 0)
@@ -56,13 +56,11 @@ def extractClip(
     if clip_resolution and target_resolution:
         cmd += ['-vf', padAndScaleFilter(clip_resolution, target_resolution)]
 
-    if reencode:
-        cmd = cmd + configure.get('VIDEO') + configure.get('AUDIO')
-    else:
-        cmd = cmd + ['-codec', 'copy']
+    cmd = cmd + configure.get('VIDEO') + configure.get('AUDIO')
 
     cmd += [output]
     logger.info('Extraction command: %s', cmd)
+
     def delete():
         logger.error("Failed to process {}".format(output))
         try:

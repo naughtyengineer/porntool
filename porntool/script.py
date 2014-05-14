@@ -9,6 +9,7 @@ from sqlalchemy import orm
 from porntool import configure
 from porntool import util
 from porntool import db
+from porntool import tables
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,15 @@ class LockFile():
 
 LOCK_FILE = None
 
+def _setSession(echo=False, filename=None):
+    filename = filename or configure.get('SQL_FILE')
+    engine = sql.create_engine(db.urlFromFile(filename), echo=echo)
+    tables.Base.metadata.create_all(engine)
+    Session = orm.sessionmaker(bind=engine)
+    session = Session()
+    db.setSession(session)
+
+
 def standardSetup(echo=False, file_handler=True, copy_db=True):
     """Utility function to setup up the configuration, logging and database
 
@@ -61,13 +71,9 @@ def standardSetup(echo=False, file_handler=True, copy_db=True):
         with open(SQL_FILE) as f:
             shutil.copyfileobj(f, TMP_FILE)
             TMP_FILE.flush()
-        engine = sql.create_engine(db.urlFromFile(TMP_FILE.name), echo=echo)
+        _setSession(echo, TMP_FILE.name)
     else:
-        engine = sql.create_engine(db.urlFromFile(SQL_FILE), echo=echo)
-    Session = orm.sessionmaker(bind=engine)
-    session = Session()
-    db.setSession(session)
-
+        _setSession(echo, SQL_FILE)
 
 def standardCleanup():
     if COPIED:

@@ -44,7 +44,7 @@ class ClipPicker(object):
         self.addTrackers()
 
     def _nextTracker(self):
-        return min(self.trackers, key=lambda t: t.checkedDuration())
+        raise NotImplementedError()
 
     def getNextClip(self):
         if not self.trackers:
@@ -60,16 +60,21 @@ class ClipPicker(object):
         self.counter += 1
         return clip
 
+class Least(object):
+    def _nextTracker(self):
+        return min(self.trackers, key=lambda t: t.checkedDuration())
 
-class RandomClipPicker(ClipPicker):
+class Random(object):
     def _nextTracker(self):
         return random.choice(self.trackers)
 
 
-class OnlyNewClips(RandomClipPicker):
-    def _newTracker(self):
-        while True:
-            fp = next(self.iinventory)
-            if len(fp.pornfile.clips) == 0:
-                s = self.tracker_factory(fp)
-                return s
+def OnlyNClips(N):
+    class _OnlyNClips(object):
+        def _newTracker(self):
+            while True:
+                fp = next(self.iinventory)
+                if len(fp.pornfile.clips) < N:
+                    s = self.tracker_factory(fp, self.ratings)
+                    return s
+    return _OnlyNClips
