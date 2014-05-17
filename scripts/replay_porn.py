@@ -145,8 +145,8 @@ def printSkippedFiles():
         print fp.path
 
 
-
-parser = argparse.ArgumentParser(description='Play your porn collection', parents=[select.parser])
+parser = argparse.ArgumentParser(
+    description='Play clips for porn collection', parents=[select.parser])
 parser.add_argument('files', nargs='*', help='files to play; play entire collection if omitted')
 parser.add_argument('--shuffle', default=True, type=util.flexibleBoolean, help='shuffle file list')
 parser.add_argument('--no-edit', action='store_true', default=False)
@@ -161,7 +161,7 @@ try:
 
     cmd_line_files = [f.decode('utf-8') for f in ARGS.files]
     if ARGS.update_library:
-        filepaths = movie.loadFiles(cmd_line_files)
+        filepaths = movie.loadFiles(cmd_line_files, add_movie=movie.addMovie)
     else:
         filepaths = []
         for file_ in cmd_line_files:
@@ -172,6 +172,7 @@ try:
             filepaths.extend(some_filepaths)
             #uniq_filepaths.update({fp.file_id: fp for fp in some_filepaths})
         #filepaths = uniq_filepaths.values()
+    logging.debug('filepaths: %s', len(filepaths))
     db.getSession().commit()
 
     inventory = movie.MovieInventory(

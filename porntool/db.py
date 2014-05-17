@@ -8,8 +8,10 @@ logger = logging.getLogger(__name__)
 
 _session = None
 
+
 def urlFromFile(file_name):
     return 'sqlite:///{}'.format(file_name)
+
 
 def setSession(session):
     global _session
@@ -18,10 +20,12 @@ def setSession(session):
         logger.warn('_session is already set')
     _session = session
 
+
 def getSession():
     if not _session:
         raise pt.PorntoolException('No session set')
     return _session
+
 
 def saveUsage(movie, length, timestamp=None):
     timestamp = timestamp or dt.datetime.now()
