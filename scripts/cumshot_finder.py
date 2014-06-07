@@ -30,7 +30,7 @@ from porntool import util
 from porntool import widget
 from porntool.replay_porn import *
 
-class ExcludeClipTag(filepath):
+class ExcludeClipTag(object):
     def __init__(self, project, clip_tag):
         self.project = project
         self.clip_tag = clip_tag
