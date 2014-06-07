@@ -122,7 +122,7 @@ def processClips(clips, output_dir, quick=False, resolution=None):
 
 
 parser = argparse.ArgumentParser(description='Extract clips from porn collection',
-                                 parents=[select.parser])
+                                 parents=[select.parser, filters.PARSER])
 parser.add_argument('files', nargs='+', help='files to play; play entire collection if omitted')
 parser.add_argument('--output', help='directory for output', default='.')
 parser.add_argument('--time', default=10, type=int, help="minutes of clips to extract")
@@ -145,17 +145,20 @@ try:
         ).all()
         filepaths.extend(some_filepaths)
 
-    inventory = movie.MovieInventory(
-        filepaths, ARGS.shuffle,
-        [filters.Exists(), filters.ByMinCount(db.getSession(), 1),
-         filters.ExcludeTags(['pmv', 'cock.hero'])])
+    all_filters = [filters.Exists(), filters.IsMovie(), filters.ByMinCount(db.getSession(), 1),
+                   filters.ExcludeTags(['pmv', 'cock.hero', 'compilation'])]
+    all_filters.extend(filters.applyArgs(ARGS, db.getSession()))
+
+    PROJECT = t.Project(id_=1, name='redhead')
+
+    inventory = movie.MovieInventory(filepaths, ARGS.shuffle, all_filters)
     inventory = ensureProperties(inventory)
 
     normalratings = rating.NormalRatings(db.getSession())
 
     segment_tracker = select.getSegmentTrackerType(ARGS)
     clip_type = select.getClipPickerType(ARGS)
-    clip_picker = clip_type(inventory, normalratings, ARGS.nfiles, segment_tracker)
+    clip_picker = clip_type(inventory, PROJECT, normalratings, ARGS.nfiles, segment_tracker)
 
     target_time = ARGS.time * 60
     actual_time = 0
@@ -190,7 +193,6 @@ try:
 
     extracted_clips = processClips(clips, ARGS.output, ARGS.quick, resolution)
     saveClips(extracted_clips, playlist, image_clip_filenames, whites+blacks)
-
 finally:
     script.standardCleanup()
     logging.info('****** End of Script *********')

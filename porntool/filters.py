@@ -1,3 +1,4 @@
+import argparse
 import datetime
 import logging
 import random
@@ -42,17 +43,20 @@ class Exists(object):
     def __call__(self, filepath):
         return os.path.exists(filepath.path)
 
+
 class IsMovie(object):
     def __call__(self, filepath):
         ext = os.path.splitext(filepath.path)[1]
         return ext in util.valid_mov_ext
+
 
 class IncludeTags(object):
     def __init__(self, tags):
         self.tags = set(tags)
 
     def __call__(self, filepath):
-        return len(set([t.tag for t in filepath.pornfile.tags]) & self.tags) > 0
+        return (set([t.tag for t in filepath.pornfile.tags]) & self.tags) == self.tags
+
 
 class ExcludeTags(object):
     def __init__(self, tags):
@@ -60,6 +64,7 @@ class ExcludeTags(object):
 
     def __call__(self, filepath):
         return len(set([t.tag for t in filepath.pornfile.tags]) & self.tags) == 0
+
 
 class ByMaxCount(object):
     def __init__(self, session, count):
@@ -77,3 +82,36 @@ class ByMinCount(object):
 
     def __call__(self, filepath):
         return filepath.pornfile.getPlayCount(self.session) >= self.count
+
+
+class ExcludeFilenames(object):
+    def __init__(self, filenames):
+        self.filenames = set(filenames)
+
+    def __call__(self, filepath):
+        return filepath.path not in self.filenames
+
+
+PARSER = argparse.ArgumentParser(add_help=False)
+PARSER.add_argument('--max-count', type=int)
+PARSER.add_argument('--min-count', type=int)
+PARSER.add_argument('--include-tags', nargs="+")
+PARSER.add_argument('--exclude-tags', nargs="+")
+PARSER.add_argument('--exclude-files', help="a file containing a list of filenames to exclude")
+
+
+def applyArgs(args, session):
+    all_filters = []
+    if args.min_count is not None:
+        all_filters.append(ByMinCount(session, args.min_count))
+    if args.max_count is not None:
+        all_filters.append(ByMaxCount(session, args.max_count))
+    if args.include_tags:
+        all_filters.append(IncludeTags(args.include_tags))
+    if args.exclude_tags:
+        all_filters.append(ExcludeTags(args.exclude_tags))
+    if args.exclude_files:
+        with open(args.exclude_files) as f:
+            e = ExcludeFilenames([l.strip() for l in f])
+            all_filters.append(e)
+    return all_filters

@@ -4,8 +4,9 @@ import random
 logger = logging.getLogger(__name__)
 
 class ClipPicker(object):
-    def __init__(self, iinventory, ratings, n=20, tracker_factory=None):
+    def __init__(self, iinventory, project, ratings, n, tracker_factory):
         self.iinventory = iinventory
+        self.project = project
         self.ratings = ratings
         self.tracker_factory = tracker_factory
         self.trackers = []
@@ -24,7 +25,7 @@ class ClipPicker(object):
             except:
                 logger.exception('Failed trying to get next tracker')
         logger.debug('Loading next tracker using %s', fp)
-        s = self.tracker_factory(fp, self.ratings)
+        s = self.tracker_factory(fp, self.project, self.ratings)
         return s
 
     def addTrackers(self, n=1):
@@ -74,7 +75,8 @@ def OnlyNClips(N):
         def _newTracker(self):
             while True:
                 fp = next(self.iinventory)
-                if len(fp.pornfile.clips) < N:
-                    s = self.tracker_factory(fp, self.ratings)
+                clips = [c for c in fp.pornfile._clips if c.project_id == self.project.id_]
+                if len(clips) < N:
+                    s = self.tracker_factory(fp, self.project, self.ratings)
                     return s
     return _OnlyNClips

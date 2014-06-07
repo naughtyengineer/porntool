@@ -116,19 +116,26 @@ class NormalRating(Base):
     rating_adjustment = sql.Column(sql.Float)
 
 
+class Project(Base):
+    __tablename__ = 'project'
+    id_ = sql.Column('id', sql.Integer, primary_key=True)
+    name = sql.Column(sql.String)
+
+
 class Clip(Base):
     """tag subsections of movies for highlights"""
     __tablename__ = 'clip'
     id_ = sql.Column('id', sql.Integer, primary_key=True)
     file_id = sql.Column(sql.Integer, sql.ForeignKey('movie.file_id'))
+    project_id = sql.Column(sql.Integer, sql.ForeignKey('project.id'))
     start = sql.Column(sql.Float)
     duration = sql.Column(sql.Float)
     # 0 means not active
     active = sql.Column(sql.Integer)
 
-    moviefile = orm.relationship('MovieFile', backref=orm.backref('clips'))
+    moviefile = orm.relationship('MovieFile', backref=orm.backref('_clips'))
     tags = orm.relationship(
-        'Tag', secondary=clip_tag_association, backref=orm.backref('clips'))
+        'Tag', secondary=clip_tag_association, backref=orm.backref('_clips'))
 
     @property
     def end(self):
@@ -144,6 +151,7 @@ class Clip(Base):
             self.duration = value - self.start
         else:
             self.start = value - self.duration
+
 
 class Flag(Base):
     """flag a location in a movie - probably because its good"""

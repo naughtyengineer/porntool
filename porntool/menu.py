@@ -119,13 +119,14 @@ class TagEditor(MenuPadding):
 
 
 class ClipMenuPadding(MenuPadding):
-    def __init__(self, clip, adjuster=None, title_prefix=''):
+    def __init__(self, clip, project, adjuster=None, title_prefix=''):
         filepath = clip.moviefile.getActivePath()
-        active = [c for c in filepath.pornfile.clips if c.active]
+        clips = [c for c in filepath.pornfile._clips if c.project_id == project.id_]
+        active = [c for c in clips if c.active]
         total = sum(c.duration for c in active)
         try:
             numer = len(active)
-            denom = len(filepath.pornfile.clips)
+            denom = len(clips)
         except ZeroDivisionError:
             fraction = 0.0
         title = u"{}{}: {} sec ({} total, {} / {})".format(

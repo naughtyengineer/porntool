@@ -1,3 +1,7 @@
+# Almost identical to replay_porn, but only for movies that don't
+# have a clip with a 'cumshot' tag.  The tag doesn't have to be
+# on an active clip.
+
 import argparse
 import collections as cols
 import itertools as it
@@ -26,14 +30,48 @@ from porntool import util
 from porntool import widget
 from porntool.replay_porn import *
 
+class ExcludeClipTag(filepath):
+    def __init__(self, project, clip_tag):
+        self.project = project
+        self.clip_tag = clip_tag
+
+    def __call__(self, filepath):
+        for clip in filepath.pornfile._clips:
+            if clip.project_id == self.project.id_:
+                for tag in clip.tags:
+                    if tag.tag == self.clip_tag:
+                        return False
+        return True
+
+
+class OneSegmentTracker(segment.SegmentTracker):
+    def __init__(self, filepath, project, *args):
+        self.filepath = filepath
+        self.project = project
+        self.triggered = False
+
+    def nextClip(self):
+        if self.triggered:
+            return None
+        else:
+            self.triggered = True
+            start = max(0, self.filepath.pornfile.length - 60)
+            return self._makeClip(
+                file_id=self.filepath.file_id, project_id=self.project.id_,
+                start=start, duration=10)
+
+
+class Picker(clippicker.Random, clippicker.ClipPicker):
+    pass
+
 
 parser = argparse.ArgumentParser(
-    description='Play clips for porn collection', parents=[select.parser, filters.PARSER])
+    description='Play clips for porn collection', parents=[filters.PARSER])
 parser.add_argument('files', nargs='*', help='files to play; play entire collection if omitted')
 parser.add_argument('--shuffle', default=True, type=util.flexibleBoolean, help='shuffle file list')
-parser.add_argument('--no-edit', action='store_true', default=False)
 parser.add_argument('--update-library', action='store_true', default=False)
 parser.add_argument('--extra', default='')
+parser.add_argument('--clip-tag', default='cumshot')
 ARGS = parser.parse_args()
 
 
@@ -50,7 +88,12 @@ try:
     db.getSession().commit()
     logging.debug('%s files loaded', len(filepaths))
 
-    all_filters = [filters.ExcludeTags(['pmv', 'cock.hero', 'compilation'])]
+    PROJECT = t.Project(id_=1, name='redhead')
+
+    all_filters = [
+        filters.ExcludeTags(['pmv', 'cock.hero', 'compilation']),
+        ExcludeClipTag(PROJECT, ARGS.clip_tag)
+    ]
     all_filters.extend(filters.applyArgs(ARGS, db.getSession()))
 
     inventory = movie.MovieInventory(filepaths, ARGS.shuffle, all_filters)
@@ -59,17 +102,13 @@ try:
 
     normalratings = rating.NormalRatings(db.getSession())
 
-    PROJECT = t.Project(id_=1, name='redhead')
-
-    segment_tracker = select.getSegmentTrackerType(ARGS)
-    clip_type = select.getClipPickerType(ARGS)
-    clip_picker = clip_type(iinventory, PROJECT, normalratings, ARGS.nfiles, segment_tracker)
+    clip_picker = Picker(iinventory, PROJECT, normalratings, 20, OneSegmentTracker)
 
     FILL = widget.Status(valign='bottom')
 
     # bold is needed for the AdjustController
     palette = [('bold', 'default,bold', 'default', 'bold'),]
-    CLIP_PLAYER = ClipPlayer(clip_picker, FILL, PROJECT, ARGS.extra, ARGS.no_edit)
+    CLIP_PLAYER = ClipPlayer(clip_picker, FILL, PROJECT, ARGS.extra, False)
     LOOP = urwid.MainLoop(
         FILL, palette=palette, unhandled_input=CLIP_PLAYER.handleKey, handle_mouse=False)
     CLIP_PLAYER.setLoop(LOOP)
@@ -79,5 +118,5 @@ try:
     LOOP.run()
 finally:
     script.standardCleanup()
-    CLIP_PLAYER.printSkippedFiles()
+    #CLIP_PLAYER.printSkippedFiles()
     logging.info('****** End of Script *********')

@@ -13,13 +13,17 @@ PotentialClip = collections.namedtuple('PotentialClip', ['start', 'end', 'priori
 Scrub = collections.namedtuple('Scrub', ['start', 'end'])
 
 class SegmentTracker(object):
-    def __init__(self, filepath, ratings):
+    def __init__(self, filepath, project, ratings):
         self.filepath = filepath
+        self.project = project
         self.ratings = ratings
         self.rows = self.getRows()
         self.total_clips = len(self.rows)
         self.checked_clips = 0
         self.current_row = 0
+
+    def getClips(self):
+        return [c for c in self.filepath.pornfile._clips if c.project_id == self.project.id_]
 
     def __str__(self):
         return  u'{}<{}>'.format(self.__class__.__name__, self.filepath.path)
@@ -28,7 +32,7 @@ class SegmentTracker(object):
         return random.choice([2, 2, 2, 2, 3, 3, 3, 4, 4, 5, 6, 7, 8])
 
     def checkedDuration(self):
-        dur = sum(c.duration for c in self.filepath.pornfile.clips)
+        dur = sum(c.duration for c in self.getClips())
         #logger.debug("Duration for %s: %s", self, dur)
         return dur
 
@@ -183,7 +187,7 @@ class SegmentTracker(object):
 
         # first load up the existing clips
         rows = [PotentialClip(c.start, c.end, 0) for c in
-                sorted(pornfile.clips, key=lambda clip: clip.start)]
+                sorted(self.getClips(), key=lambda clip: clip.start)]
 
         self.addRowsByFlag(rows)
         self.addRowsByScrubs(rows)
@@ -195,11 +199,18 @@ class SegmentTracker(object):
         logger.debug('Done getting rows for %s', self)
         return rows
 
+    def _makeClip(self, **kwargs):
+        clip = t.Clip(**kwargs)
+        db.getSession().add(clip)
+        db.getSession().flush()
+        return clip
+
+
     def _checkCandidate(self, potential_clip):
         start = potential_clip.start
         end = potential_clip.end
         overlap_found = False
-        existing_clips = self.filepath.pornfile.clips
+        existing_clips = self.getClips()
         for eclip in existing_clips:
             if eclip.start <= start <= eclip.end:
                 overlap_found = True
@@ -210,10 +221,10 @@ class SegmentTracker(object):
         if overlap_found:
             logger.debug('Overlap found.  Skipping')
             return None
-        clip = t.Clip(file_id=self.filepath.file_id, start=start, duration=end-start)
-        db.getSession().add(clip)
-        db.getSession().flush()
-        return clip
+        return self._makeClip(
+            file_id=self.filepath.file_id, project_id=self.project.id_, start=start,
+            duration=end-start)
+
 
     def _nextClip(self):
         while self.current_row < len(self.rows):
@@ -247,30 +258,29 @@ class InOrder(SegmentTracker):
 
 
 class ExistingSegmentTracker(InOrder):
-    def __init__(self, filepath, ratings):
-        SegmentTracker.__init__(self, filepath, ratings)
+    def __init__(self, filepath, project, ratings):
+        SegmentTracker.__init__(self, filepath, project, ratings)
         self.current_row = 0
         self.clips = sorted(
-            [c for c in self.filepath.pornfile.clips if c.active],
-            key=lambda c: c.start)
+            [c for c in self.getClips() if c.active], key=lambda c: c.start)
 
 
 class AllExistingSegmentTracker(InOrder):
-    def __init__(self, filepath, ratings):
-        SegmentTracker.__init__(self, filepath, ratings)
+    def __init__(self, filepath, project, ratings):
+        SegmentTracker.__init__(self, filepath, project, ratings)
         self.current_row = 0
-        self.clips = sorted([self.filepath.pornfile.clips], key=lambda c: c.start)
+        self.clips = sorted([self.getClips()], key=lambda c: c.start)
 
 
 class RandomExistingSegmentTracker(ExistingSegmentTracker):
-    def __init__(self, filepath, ratings):
-        ExistingSegmentTracker.__init__(self, filepath, ratings)
+    def __init__(self, filepath, project, ratings):
+        ExistingSegmentTracker.__init__(self, filepath, project, ratings)
         random.shuffle(self.clips)
 
 
 class PriorityRandomSegmentTracker(SegmentTracker):
-    def __init__(self, filepath, ratings):
-        SegmentTracker.__init__(self, filepath, ratings)
+    def __init__(self, filepath, project, ratings):
+        SegmentTracker.__init__(self, filepath, project, ratings)
         self.priority_rows = collections.defaultdict(list)
         for row in self.rows:
             self.priority_rows[row.priority].append(row)
@@ -290,9 +300,9 @@ class RandomSegmentTracker(SegmentTracker):
 
 
 class CountSegmentTracker(RandomSegmentTracker):
-    def __init__(self, filepath, ratings, n):
+    def __init__(self, filepath, project, ratings, n):
         self.n = n
-        SegmentTracker.__init__(self, filepath, ratings)
+        SegmentTracker.__init__(self, filepath, project, ratings)
 
     def getRows(self):
         pornfile = self.filepath.pornfile
@@ -300,7 +310,7 @@ class CountSegmentTracker(RandomSegmentTracker):
 
         # first load up the existing clips
         rows = [PotentialClip(c.start, c.end, 0) for c in
-                sorted(pornfile.clips, key=lambda clip: clip.start)]
+                sorted(self.getClips(), key=lambda clip: clip.start)]
 
         if len(rows) < self.n:
             self.addRowsUniform(rows, count=self.n)

@@ -70,7 +70,6 @@ def getMovie(filename, add_movie=None):
         return fp
 
 
-
 def checkAndAddFile(abspath, filepath_list, add_movie):
     logger.debug('Checking %s', abspath)
     if os.path.isdir(abspath):
@@ -78,9 +77,10 @@ def checkAndAddFile(abspath, filepath_list, add_movie):
             if file_[0] == '.':
                 continue
             checkAndAddFile(os.path.join(abspath, file_), filepath_list, add_movie)
-    filepath = getMovie(abspath, add_movie)
-    if filepath:
-        filepath_list.append(filepath)
+    else:
+        filepath = getMovie(abspath, add_movie)
+        if filepath:
+            filepath_list.append(filepath)
 
 
 def loadFiles(files=None, add_movie=None):
@@ -98,6 +98,17 @@ def loadFiles(files=None, add_movie=None):
         return filepath_list
 
 
+def queryFiles(filenames):
+    filepaths = []
+    FilePath = tables.FilePath
+    for file_ in filenames:
+        some_filepaths = db.getSession().query(FilePath).filter(
+            (FilePath.hostname == util.hostname) &
+            (FilePath.path.like(u'{}%'.format(file_)))
+        ).all()
+        filepaths.extend(some_filepaths)
+    return filepaths
+
 class MovieInventory(object):
     """Provides an iterator over filepaths that meet the given filters and
     ordering/shuffle.
@@ -107,7 +118,8 @@ class MovieInventory(object):
         self.filepaths = filepaths
         self.shuffle = shuffle
         self.current_movie = 0
-        basic_filters = basic_filters if basic_filters else [filters.Exists(), filters.IsMovie()]
+        basic_filters = (
+            basic_filters if basic_filters is not None else [filters.Exists(), filters.IsMovie()])
         self.filters = basic_filters + (extra_filters if extra_filters else [])
 
     def __iter__(self):

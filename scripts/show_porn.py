@@ -59,13 +59,9 @@ def nextMovie(fmp=None, *args):
     finally:
         db.getSession().commit()
 
-parser = argparse.ArgumentParser(description='Play your porn collection')
+parser = argparse.ArgumentParser(description='Play your porn collection', parents=[filters.PARSER])
 parser.add_argument('files', nargs='*', help='files to play; play entire collection if omitted')
 parser.add_argument('--shuffle', default=True, type=flexibleBoolean)
-parser.add_argument('--max-count', type=int)
-parser.add_argument('--min-count', type=int)
-parser.add_argument('--include_tags', nargs="+")
-parser.add_argument('--exclude_tags', nargs="+")
 args = parser.parse_args()
 
 script.standardSetup()
@@ -75,18 +71,7 @@ try:
     db.getSession().commit()
 
     all_filters = [filters.Exists()]
-
-    if args.min_count is not None:
-        all_filters.append(filters.ByMinCount(db.getSession(), args.min_count))
-
-    if args.max_count is not None:
-        all_filters.append(filters.ByMaxCount(db.getSession(), args.max_count))
-
-    if args.include_tags:
-        all_filters.append(filters.IncludeTags(args.include_tags))
-
-    if args.exclude_tags:
-        all_filters.append(filters.ExcludeTags(args.exclude_tags))
+    all_filters.extend(filters.applyArgs(args, db.getSession()))
 
     inventory = movie.MovieInventory(filepaths, args.shuffle, all_filters)
     iinventory = iter(inventory)
