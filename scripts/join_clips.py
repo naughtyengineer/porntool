@@ -24,3 +24,4 @@ audio = configure.get('AUDIO')
 
 subprocess.call(['ffmpeg', '-f', 'concat', '-i', concat, '-c', 'copy', args.output])
 os.remove(concat)
+
