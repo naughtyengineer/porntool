@@ -66,6 +66,22 @@ class ExcludeTags(object):
         return len(set([t.tag for t in filepath.pornfile.tags]) & self.tags) == 0
 
 
+class IncludeGirls(object):
+    def __init__(self, girls):
+        self.girls = set(girls)
+
+    def __call__(self, filepath):
+        return (set([g.name for g in filepath.pornfile.girls]) & self.girls) == self.girls
+
+
+class ExcludeGirls(object):
+    def __init__(self, girls):
+        self.girls = set(girls)
+
+    def __call__(self, filepath):
+        return len(set([g.name for g in filepath.pornfile.girls]) & self.girls) == 0
+
+
 class ByMaxCount(object):
     def __init__(self, session, count):
         self.session = session
@@ -98,6 +114,8 @@ PARSER.add_argument('--min-count', type=int)
 PARSER.add_argument('--include-tags', nargs="+")
 PARSER.add_argument('--exclude-tags', nargs="+")
 PARSER.add_argument('--exclude-files', help="a file containing a list of filenames to exclude")
+PARSER.add_argument('--include-girls', nargs="+")
+PARSER.add_argument('--exclude-girls', nargs="+")
 
 
 def applyArgs(args, session):
