@@ -59,7 +59,8 @@ def nextMovie(fmp=None, *args):
     finally:
         db.getSession().commit()
 
-parser = argparse.ArgumentParser(description='Play your porn collection', parents=[filters.PARSER])
+parser = argparse.ArgumentParser(
+    description='Play your porn collection', parents=[filters.getParser()])
 parser.add_argument('files', nargs='*', help='files to play; play entire collection if omitted')
 parser.add_argument('--shuffle', default=True, type=flexibleBoolean)
 args = parser.parse_args()

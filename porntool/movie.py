@@ -98,7 +98,8 @@ def loadFiles(files=None, add_movie=None):
         return filepath_list
 
 
-def queryFiles(filenames):
+def queryFiles(filenames=None):
+    filenames = filenames or ['/']
     filepaths = []
     FilePath = tables.FilePath
     for file_ in filenames:

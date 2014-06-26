@@ -87,9 +87,7 @@ class SlavePlayer(widget.OnFinished, widget.LoopAware):
     SEEK_RELATIVE = 0
     SEEK_PERCENTAGE = 1
     SEEK_ABSOLUTE = 2
-    DEFAULT_CMD = ('{player} --slave --quiet '
-                  '--input=nodefault-bindings --noconfig=all '
-                  '{extra} {geom}')
+    DEFAULT_CMD = ('{player} {options} {extra} {geom}')
     DEFAULT_GEOM = '--geometry=1440x640+0+900'
     # --msglevel=global=6
     # has a line like: EOF code: XXX
@@ -102,7 +100,8 @@ class SlavePlayer(widget.OnFinished, widget.LoopAware):
         if geom is None:
             geom = configure.get('GEOMETRY')
         self.cmd = cmd.format(
-            player=configure.get('MPLAYER'), extra=extra, geom=geom).split() + [filename]
+            player=configure.get('MPLAYER'), options=configure.get('MPLAYER_OPTIONS'),
+            extra=extra, geom=geom).split() + [filename]
         self.p = None
         self.playtime = 0
         self._log = open('mplayer.log', 'w')
@@ -179,7 +178,7 @@ class SlavePlayer(widget.OnFinished, widget.LoopAware):
             self._log.write(out)
             for parser in self._parsers:
                 parser(out)
-        if not self._finished:
+        if not self._finished and self._loop:
             self._loop.alarm(.2, self._run)
 
     def isPaused(self):

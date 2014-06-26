@@ -4,6 +4,7 @@ import urwid
 
 logger = logging.getLogger(__name__)
 
+
 class OnFinished(object):
     def __init__(self, *args, **kwds):
         self._on_finished = []
@@ -21,6 +22,7 @@ class OnFinished(object):
             else:
                 logger.debug('Calling %s', onf.__name__)
                 onf(**kwds)
+
 
 class LoopAware(object):
     def __init__(self, *args, **kwds):

@@ -22,13 +22,21 @@ class SegmentTracker(object):
         self.checked_clips = 0
         self.current_row = 0
 
+    def __iter__(self):
+        while True:
+            c = self.nextClip()
+            if c:
+                yield c
+            else:
+                break
+
     def getClips(self):
         return [c for c in self.filepath.pornfile._clips if c.project_id == self.project.id_]
 
     def __str__(self):
         return  u'{}<{}>'.format(self.__class__.__name__, self.filepath.path)
 
-    def length(self):
+    def _length(self):
         return random.choice([2, 2, 2, 2, 3, 3, 3, 4, 4, 5, 6, 7, 8])
 
     def checkedDuration(self):
@@ -102,7 +110,7 @@ class SegmentTracker(object):
         for flag in flags:
             start = flag.location - 5
             while start < flag.location + 5:
-                end = start + self.length()
+                end = start + self._length()
                 self.addRow(rows, start, end, 0)
                 start = end
 
@@ -132,7 +140,7 @@ class SegmentTracker(object):
                 # ignore the short stuff
                 if end - start < 1:
                     break
-                target_length = self.length()
+                target_length = self._length()
                 if clip_length > target_length:
                     self.addRow(rows, start, start + target_length, 1)
                     # skip ahead some bit to make it interesting
@@ -172,7 +180,7 @@ class SegmentTracker(object):
                 if remaining < 1.5:
                     failed_count += 1
                     continue
-                length = min(remaining, self.length())
+                length = min(remaining, self._length())
                 end = location + length
                 # don't need to check this, know its in a gap
                 rows.append(PotentialClip(location, end, 2))
@@ -247,7 +255,13 @@ class SegmentTracker(object):
         return None
 
 
-class InOrder(SegmentTracker):
+class FixedLength(object):
+    @property
+    def length(self):
+        return sum(c.duration for c in self.clips)
+
+
+class InOrder(SegmentTracker, FixedLength):
     def getRows(self):
         return []
 
@@ -319,3 +333,32 @@ class CountSegmentTracker(RandomSegmentTracker):
         else:
             logger.debug('%s is already done.  Returning empty rows', self)
             return []
+
+
+def segmentClips(segment_tracker):
+    before = []
+    pre = []
+    cumshot = []
+    post = []
+    cumshot_found = False
+    project_clips = [c for c in segment_tracker]
+    for clip in sorted(project_clips, key=lambda x: x.start):
+        is_cumshot = 'cumshot' in [t.tag for t in clip.tags]
+        is_postcumshot = 'post.cumshot' in [t.tag for t in clip.tags]
+        is_precumshot = 'pre.cumshot' in [t.tag for t in clip.tags]
+        if is_cumshot:
+            cumshot_found = True
+        if not clip.active:
+            continue
+        if is_cumshot:
+            cumshot.append(clip)
+        elif is_precumshot:
+            pre.append(clip)
+        elif is_postcumshot:
+            post.append(clip)
+        else:
+            if cumshot_found:
+                post.append(clip)
+            else:
+                before.append(clip)
+    return before, pre, cumshot, post

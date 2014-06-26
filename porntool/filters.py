@@ -108,15 +108,16 @@ class ExcludeFilenames(object):
         return filepath.path not in self.filenames
 
 
-PARSER = argparse.ArgumentParser(add_help=False)
-PARSER.add_argument('--max-count', type=int)
-PARSER.add_argument('--min-count', type=int)
-PARSER.add_argument('--include-tags', nargs="+")
-PARSER.add_argument('--exclude-tags', nargs="+")
-PARSER.add_argument('--exclude-files', help="a file containing a list of filenames to exclude")
-PARSER.add_argument('--include-girls', nargs="+")
-PARSER.add_argument('--exclude-girls', nargs="+")
-
+def getParser():
+    PARSER = argparse.ArgumentParser(add_help=False)
+    PARSER.add_argument('--max-count', type=int)
+    PARSER.add_argument('--min-count', type=int)
+    PARSER.add_argument('--include-tags', nargs="+")
+    PARSER.add_argument('--exclude-tags', nargs="+")
+    PARSER.add_argument('--exclude-files', help="a file containing a list of filenames to exclude")
+    PARSER.add_argument('--include-girls', nargs="+")
+    PARSER.add_argument('--exclude-girls', nargs="+")
+    return PARSER
 
 def applyArgs(args, session):
     all_filters = []

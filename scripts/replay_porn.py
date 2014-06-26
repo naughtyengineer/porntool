@@ -13,9 +13,10 @@ from porntool import clippicker
 from porntool import controller
 from porntool import db
 from porntool import filters
+from porntool import library
 from porntool import menu
 from porntool import movie
-from porntool import player
+from porntool import project
 from porntool import rating
 from porntool import reviewer
 from porntool import script
@@ -28,27 +29,26 @@ from porntool.replay_porn import *
 
 
 parser = argparse.ArgumentParser(
-    description='Play clips for porn collection', parents=[select.parser, filters.PARSER])
-parser.add_argument('files', nargs='*', help='files to play; play entire collection if omitted')
+    description='Play clips for porn collection',
+    parents=[select.getParser(), filters.getParser(), project.getParser(), library.getParser()])
+
 parser.add_argument('--shuffle', default=True, type=util.flexibleBoolean, help='shuffle file list')
 parser.add_argument('--no-edit', action='store_true', default=False)
-parser.add_argument('--update-library', action='store_true', default=False)
 parser.add_argument('--extra', default='')
 ARGS = parser.parse_args()
 
+CLIP_PLAYER = None
 
 try:
     script.standardSetup()
     logging.info('****** Starting new script ********')
 
-    cmd_line_files = [f.decode('utf-8') for f in ARGS.files]
-    if ARGS.update_library:
-        filepaths = movie.loadFiles(cmd_line_files, add_movie=movie.addMovie)
-    else:
-        filepaths = movie.queryFiles(cmd_line_files)
+    filepaths = library.getFilePaths(ARGS)
     logging.debug('filepaths: %s', len(filepaths))
     db.getSession().commit()
     logging.debug('%s files loaded', len(filepaths))
+
+    PROJECT = project.getProject(ARGS)
 
     all_filters = [filters.ExcludeTags(['pmv', 'cock.hero', 'compilation'])]
     all_filters.extend(filters.applyArgs(ARGS, db.getSession()))
@@ -58,8 +58,6 @@ try:
     iinventory = inventoryFilter(inventory)
 
     normalratings = rating.NormalRatings(db.getSession())
-
-    PROJECT = t.Project(id_=1, name='redhead')
 
     segment_tracker = select.getSegmentTrackerType(ARGS)
     clip_type = select.getClipPickerType(ARGS)
@@ -79,5 +77,6 @@ try:
     LOOP.run()
 finally:
     script.standardCleanup()
-    CLIP_PLAYER.printSkippedFiles()
+    if CLIP_PLAYER:
+        CLIP_PLAYER.printSkippedFiles()
     logging.info('****** End of Script *********')

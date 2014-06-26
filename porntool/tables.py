@@ -159,6 +159,7 @@ class Flag(Base):
     id_ = sql.Column('id', sql.Integer, primary_key=True)
     file_id = sql.Column(sql.Integer, sql.ForeignKey('movie.file_id'))
     location = sql.Column(sql.Float)
+    audio_only = sql.Column(sql.Boolean, default=False)
     moviefile = orm.relationship('MovieFile', backref=orm.backref('flags'))
 
 

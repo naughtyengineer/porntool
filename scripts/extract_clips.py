@@ -7,11 +7,13 @@ import random
 import os.path
 import subprocess
 
+from porntool import clippicker
 from porntool import db
 from porntool import extract
 from porntool import filters
 from porntool import movie
 from porntool import player
+from porntool import project
 from porntool import rating
 from porntool import script
 from porntool import select
@@ -95,7 +97,7 @@ def clipFromImage(output_dir, image_filename, resolution, frames):
     subprocess.call(cmd)
     return another_name
 
-def processClips(clips, output_dir, quick=False, resolution=None):
+def processClips(clips, output_dir, resolution=None):
     duration = 0
     start = datetime.datetime.now()
     success = []
@@ -109,7 +111,7 @@ def processClips(clips, output_dir, quick=False, resolution=None):
             print "Missing file for Clip", clip.id_
             continue
         input_ = fp.path
-        mp = player.identify(fp) if not quick else None
+        mp = player.identify(fp)
         if not extract.extractClip(clip, output, resolution, mp, cleanup=False):
             continue
         #if not extract.testExtraction(output):
@@ -121,16 +123,18 @@ def processClips(clips, output_dir, quick=False, resolution=None):
     return success
 
 
-parser = argparse.ArgumentParser(description='Extract clips from porn collection',
-                                 parents=[select.parser, filters.PARSER])
-parser.add_argument('files', nargs='+', help='files to play; play entire collection if omitted')
+parser = argparse.ArgumentParser(
+    description='Extract clips from porn collection',
+    parents=[select.getParser(default_tracker='existing'),
+             filters.getParser(), project.getParser()])
+parser.add_argument('files', nargs='*', help='files to play; play entire collection if omitted')
 parser.add_argument('--output', help='directory for output', default='.')
-parser.add_argument('--time', default=10, type=int, help="minutes of clips to extract")
+parser.add_argument('--time', default=5, type=int, help="minutes of clips to extract")
 parser.add_argument('--shuffle', default=True, type=util.flexibleBoolean)
 parser.add_argument('--extra', default='', help='extra args to pass to player')
-parser.add_argument('--quick', action='store_true', help='set to not reencode, just extract')
 parser.add_argument('--resolution')
 parser.add_argument('--images', nargs='*', help='images to insert between clips')
+parser.add_argument('--only-blanks', action='store_true')
 ARGS = parser.parse_args()
 
 try:
@@ -149,7 +153,7 @@ try:
                    filters.ExcludeTags(['pmv', 'cock.hero', 'compilation'])]
     all_filters.extend(filters.applyArgs(ARGS, db.getSession()))
 
-    PROJECT = t.Project(id_=1, name='redhead')
+    PROJECT = project.getProject(ARGS)
 
     inventory = movie.MovieInventory(filepaths, ARGS.shuffle, all_filters)
     inventory = ensureProperties(inventory)
@@ -157,27 +161,24 @@ try:
     normalratings = rating.NormalRatings(db.getSession())
 
     segment_tracker = select.getSegmentTrackerType(ARGS)
-    clip_type = select.getClipPickerType(ARGS)
-    clip_picker = clip_type(inventory, PROJECT, normalratings, ARGS.nfiles, segment_tracker)
+    #clip_type = select.getClipPickerType(ARGS, [clippicker.TargetLength(ARGS.time)])
+    clip_picker = clippicker.TargetLength(
+        inventory, PROJECT, normalratings, ARGS.time, segment_tracker)
 
-    target_time = ARGS.time * 60
-    actual_time = 0
+    girls = set()
     clips = []
-    while actual_time < target_time:
+    while True:
         next_clip = clip_picker.getNextClip()
         if not next_clip:
             break
-        actual_time += next_clip.duration
+        girls.update(g.name for g in next_clip.moviefile.girls)
         clips.append(next_clip)
 
-    if not ARGS.quick:
-        if ARGS.resolution:
-            w,h = ARGS.resolution.split('x')
-            resolution = extract.Resolution(float(w), float(h))
-        else:
-            resolution = extract.getTargetResolutionClips(clips)
+    if ARGS.resolution:
+        w,h = ARGS.resolution.split('x')
+        resolution = extract.Resolution(float(w), float(h))
     else:
-        resolution = None
+        resolution = extract.getTargetResolutionClips(clips)
 
     playlist = os.path.join(ARGS.output, 'playlist-{}.txt'.format(
         datetime.datetime.now().strftime('%Y%m%d%H%M')))
@@ -185,14 +186,17 @@ try:
     blacks = makeSolidClips(ARGS.output, BLACK, resolution, [9, 9, 9, 10, 10, 11, 12, 13, 14])
     logging.debug('len(whites) = %s', len(whites))
     logging.debug('len(blacks) = %s', len(blacks))
-    image_clip_filenames = []
-    if ARGS.images:
-        for image in ARGS.images[:len(clips)]:
-            image_clip = clipFromImage(ARGS.output, image, resolution, random.randint(3, 15))
-            image_clip_filenames.append(image_clip)
+    if not ARGS.only_blanks:
+        image_clip_filenames = []
+        if ARGS.images:
+            for image in ARGS.images[:len(clips)]:
+                image_clip = clipFromImage(ARGS.output, image, resolution, random.randint(3, 15))
+                image_clip_filenames.append(image_clip)
 
-    extracted_clips = processClips(clips, ARGS.output, ARGS.quick, resolution)
-    saveClips(extracted_clips, playlist, image_clip_filenames, whites+blacks)
+        extracted_clips = processClips(clips, ARGS.output, resolution)
+        saveClips(extracted_clips, playlist, image_clip_filenames, whites+blacks)
+    for g in girls:
+        print g
 finally:
     script.standardCleanup()
     logging.info('****** End of Script *********')

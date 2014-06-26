@@ -1,8 +1,9 @@
 import hashlib
 import logging
+import os
 import os.path
 import platform
-import os
+import random
 import subprocess
 import sys
 
@@ -75,3 +76,15 @@ def configureLogging(level=logging.DEBUG, file_handler=True):
     logging.getLogger('urwid').setLevel('WARNING')
 
 
+def merge(*items):
+    items = list(items)
+    indexes = [0] * len(items)
+    while items:
+        j = random.randint(0, len(items) - 1)
+        i = indexes[j]
+        if len(items[j]) <= i:
+            items.pop(j)
+            indexes.pop(j)
+            continue
+        yield items[j][i]
+        indexes[j] += 1
