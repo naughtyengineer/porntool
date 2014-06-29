@@ -20,8 +20,8 @@ from porntool import filters
 from porntool import menu
 from porntool import movie
 from porntool import player
+from porntool import project
 from porntool import rating
-from porntool import reviewer
 from porntool import script
 from porntool import segment
 from porntool import select
@@ -58,7 +58,7 @@ class OneSegmentTracker(segment.SegmentTracker):
             start = max(0, self.filepath.pornfile.length - 60)
             return self._makeClip(
                 file_id=self.filepath.file_id, project_id=self.project.id_,
-                start=start, duration=10)
+                start=start, duration=1)
 
 
 class Picker(clippicker.Random, clippicker.ClipPicker):
@@ -66,7 +66,8 @@ class Picker(clippicker.Random, clippicker.ClipPicker):
 
 
 parser = argparse.ArgumentParser(
-    description='Play clips for porn collection', parents=[filters.PARSER])
+    description='Play clips for porn collection',
+    parents=[filters.getParser(), project.getParser()])
 parser.add_argument('files', nargs='*', help='files to play; play entire collection if omitted')
 parser.add_argument('--shuffle', default=True, type=util.flexibleBoolean, help='shuffle file list')
 parser.add_argument('--update-library', action='store_true', default=False)
@@ -88,10 +89,10 @@ try:
     db.getSession().commit()
     logging.debug('%s files loaded', len(filepaths))
 
-    PROJECT = t.Project(id_=1, name='redhead')
+    PROJECT = project.getProject(ARGS)
 
     all_filters = [
-        filters.ExcludeTags(['pmv', 'cock.hero', 'compilation']),
+        filters.ExcludeTags(['pmv', 'cock.hero', 'compilation', 'solo', 'lesbian']),
         ExcludeClipTag(PROJECT, ARGS.clip_tag)
     ]
     all_filters.extend(filters.applyArgs(ARGS, db.getSession()))
@@ -108,7 +109,7 @@ try:
 
     # bold is needed for the AdjustController
     palette = [('bold', 'default,bold', 'default', 'bold'),]
-    CLIP_PLAYER = ClipPlayer(clip_picker, FILL, PROJECT, ARGS.extra, False)
+    CLIP_PLAYER = ClipPlayer(clip_picker, FILL, PROJECT, ARGS.extra, False, skip_preview=True)
     LOOP = urwid.MainLoop(
         FILL, palette=palette, unhandled_input=CLIP_PLAYER.handleKey, handle_mouse=False)
     CLIP_PLAYER.setLoop(LOOP)

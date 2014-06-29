@@ -7,6 +7,8 @@ import random
 import subprocess
 import sys
 
+import numpy as np
+
 from porntool import configure
 from porntool import db
 
@@ -23,6 +25,11 @@ DEVNULL = open(os.devnull, 'w')
 
 valid_mov_ext = [".avi", ".mpg", ".wmv", ".flv", ".mov", ".mp4",
                  ".vob", ".divx", ".mkv", ".m4v", ".mpeg"]
+
+
+class Namespace(object):
+    def __init__(self, attr_dict):
+        self.__dict__.update(attr_dict)
 
 
 def flexibleBoolean(x):
@@ -76,15 +83,58 @@ def configureLogging(level=logging.DEBUG, file_handler=True):
     logging.getLogger('urwid').setLevel('WARNING')
 
 
-def merge(*items):
-    items = list(items)
+class Weights(object):
+    def __init__(self, weights):
+        self.weights = weights
+
+    def _head(self, index):
+        assert len(index) == len(self.weights)
+        for i, w in zip(index, self.weights):
+            if i < len(w):
+                yield w[i]
+            else:
+                yield 0
+
+    def sum(self, index):
+        return sum(self._head(index))
+
+    def getIndex(self, target_value, index):
+        assert target_value < self.sum(index)
+        lower_bound = 0
+        for i, value in enumerate(self._head(index)):
+            upper_bound = lower_bound + value
+            if lower_bound <= target_value < upper_bound:
+                return i
+            lower_bound = upper_bound
+        raise Exception("Can't get here")
+
+    def random(self, index):
+        s = self.sum(index)
+        if s:
+            r = random.random() * s
+            return self.getIndex(r, index)
+        else:
+            # if all the weights sum to zero, we're done
+            return None
+
+
+def merge(items, weights=None):
+    """Randomly merges `items` together.
+
+    Args:
+        items: a list of lists
+        weights: weights to base the random selection off of
+    """
     indexes = [0] * len(items)
-    while items:
-        j = random.randint(0, len(items) - 1)
+    if not weights:
+        weights = []
+        for item_list in items:
+            weights.append([1 for i in item_list])
+    weights = Weights(weights)
+    while True:
+        j = weights.random(indexes)
+        if j is None:
+            break
         i = indexes[j]
-        if len(items[j]) <= i:
-            items.pop(j)
-            indexes.pop(j)
-            continue
         yield items[j][i]
         indexes[j] += 1

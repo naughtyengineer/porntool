@@ -1,3 +1,4 @@
+from __future__ import division
 import itertools
 import logging
 import random
@@ -122,8 +123,19 @@ class TargetLength(object):
             pres.append(pre)
             mids.append(mid)
             posts.append(post)
+        # the idea with the weightings is to bias clips that
+        # are earlier in the original movie - we want that to
+        # show up earlier in the clip list
+        before_weights = []
+        for before_clips in befores:
+            clip_weights = []
+            for clip in before_clips:
+                length = clip.moviefile.length
+                clip_weights.append(1 - (clip.start / length))
+            before_weights.append(clip_weights)
         return itertools.chain.from_iterable((
-            util.merge(*befores), util.merge(*pres), util.merge(*mids), util.merge(*posts)))
+            util.merge(befores, before_weights), util.merge(pres),
+            util.merge(mids), util.merge(posts)))
 
     def getNextClip(self):
         if not self._all_clips:

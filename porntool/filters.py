@@ -114,7 +114,8 @@ def getParser():
     PARSER.add_argument('--min-count', type=int)
     PARSER.add_argument('--include-tags', nargs="+")
     PARSER.add_argument('--exclude-tags', nargs="+")
-    PARSER.add_argument('--exclude-files', help="a file containing a list of filenames to exclude")
+    PARSER.add_argument(
+        '--exclude-files', nargs="+", help="a file containing a list of filenames to exclude")
     PARSER.add_argument('--include-girls', nargs="+")
     PARSER.add_argument('--exclude-girls', nargs="+")
     return PARSER
@@ -130,7 +131,8 @@ def applyArgs(args, session):
     if args.exclude_tags:
         all_filters.append(ExcludeTags(args.exclude_tags))
     if args.exclude_files:
-        with open(args.exclude_files) as f:
-            e = ExcludeFilenames([l.strip() for l in f])
-            all_filters.append(e)
+        for filename in args.exclude_files:
+            with open(filename) as f:
+                e = ExcludeFilenames([l.strip() for l in f])
+                all_filters.append(e)
     return all_filters

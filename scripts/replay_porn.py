@@ -14,6 +14,7 @@ from porntool import controller
 from porntool import db
 from porntool import filters
 from porntool import library
+from porntool import main_loop
 from porntool import menu
 from porntool import movie
 from porntool import project
@@ -72,6 +73,7 @@ try:
         FILL, palette=palette, unhandled_input=CLIP_PLAYER.handleKey, handle_mouse=False)
     CLIP_PLAYER.setLoop(LOOP)
 
+    main_loop.set(LOOP)
     LOOP.set_alarm_in(1, CLIP_PLAYER.playNextClip)
 
     LOOP.run()

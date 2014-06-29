@@ -149,7 +149,14 @@ class SegmentTracker(object):
                     self.addRow(rows, start, end, 1)
                     break
 
-    def addRowsUniform(self, rows, target_fraction=None, count=None):
+    def addRowsUniform(self, rows, target_fraction=None, count=None, margins=None):
+        """
+        Args:
+            target_fraction: if specified, will try to find clips until that much of the movie
+                is choosen
+            count: will continue to try to add rows until `count` rows are available
+            margins: ordered list of margini to leave around already selected clips
+        """
         pornfile = self.filepath.pornfile
         duration = sum(pc.end - pc.start for pc in rows)
 
@@ -164,13 +171,18 @@ class SegmentTracker(object):
             logger.info('Current rows: %s, target: %s for %s', len(rows), count, self)
             def condCheck():
                 return len(rows) < count
+        elif margins:
+            def condCheck():
+                return True
         else:
-            raise Exception('either target_fraction or count must be specified')
+            raise Exception('either target_fraction, count or margins must be specified')
+
+        margins = margins or (120, 60, 30, 10, 0)
 
         # we first try large margins, and if that fails a lot
         # we reduce the margin and try again, and again, and again
         existing_rows = len(rows)
-        for margin in (120, 60, 30, 10, 0):
+        for margin in margins:
             if not condCheck():
                 break
             failed_count = 0
@@ -313,6 +325,24 @@ class RandomSegmentTracker(SegmentTracker):
             yield self.rows.pop(i)
 
 
+class MarginSegmentTracker(RandomSegmentTracker):
+    def __init__(self, filepath, project, ratings, margins):
+        self.margins = margins
+        SegmentTracker.__init__(self, filepath, project, ratings)
+
+    def getRows(self):
+        pornfile = self.filepath.pornfile
+        logger.debug('Getting Rows for %s', self)
+
+        # first load up the existing clips
+        rows = [PotentialClip(c.start, c.end, 0) for c in
+                sorted(self.getClips(), key=lambda clip: clip.start)]
+
+        self.addRowsUniform(rows, margins=self.margins)
+        logger.debug('Done getting rows for %s', self)
+        return rows
+
+
 class CountSegmentTracker(RandomSegmentTracker):
     def __init__(self, filepath, project, ratings, n):
         self.n = n
@@ -336,6 +366,9 @@ class CountSegmentTracker(RandomSegmentTracker):
 
 
 def segmentClips(segment_tracker):
+    """"separates a clip into four parts, before the cumshot,
+    'pre-cumshot', cumshot and post-cumshot.
+    """
     before = []
     pre = []
     cumshot = []

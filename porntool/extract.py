@@ -123,5 +123,7 @@ def getTargetResolution(resolutions):
     print "Min Width:", min_width
     print "Min Height:", min_height
     r = raw_input("Enter Target Resolution: ")
+    if r == 'native':
+        return None
     w,h = r.split('x')
     return Resolution(float(w), float(h))

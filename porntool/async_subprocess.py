@@ -39,14 +39,14 @@ logger = logging.getLogger(__name__)
 class AsyncPopen(Popen):
     '''
     Asynchronous wrapper around subprocess.Popen.
-    
+
     Do not directly access AsyncPopen.stdout, AsyncPopen.stderr, or
     AsyncPopen.stdin.  Instead, use the (non-blocking asynchronous)
     AsyncPopen.communicate() method.
-    
+
     This reads entire lines from stdout and stderr at once.
-    
-    Based on a code snippet by J. F. Sebastian, found at the following URL: 
+
+    Based on a code snippet by J. F. Sebastian, found at the following URL:
         http://stackoverflow.com/questions/375427/
     '''
     def __init__(self, args, bufsize=0, executable=None,
@@ -56,7 +56,7 @@ class AsyncPopen(Popen):
                  startupinfo=None, creationflags=0):
         '''
         Creates a new AsyncPopen instance.
-        
+
         All of the arguments are the same as for subprocess.Popen with several
         exceptions:
             * stdin, stdout, and stderr can only be None or PIPE.

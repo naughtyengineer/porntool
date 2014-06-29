@@ -4,13 +4,17 @@ import urwid
 
 from porntool import db
 from porntool import girl
+from porntool import main_loop
 from porntool import tag
 from porntool import widget
 
+
 logger = logging.getLogger(__name__)
+
 
 def iterFind(itr, pred):
     return next((i for i, x in enumerate(itr) if pred(x)), None)
+
 
 class QuestionBox(urwid.Edit):
     def __init__(self, onEnter, onEsc, *args, **kwargs):
@@ -24,6 +28,7 @@ class QuestionBox(urwid.Edit):
         elif key == 'esc':
             self.onEsc()
         return super(QuestionBox, self).keypress(size, key)
+
 
 class MenuButton(urwid.Button):
     def __init__(self, shortcut, text, callback):
@@ -110,7 +115,7 @@ class TagEditor(MenuPadding):
     def __init__(self, filepath):
         title = u"ID: {}, {}".format(filepath.file_id, filepath.path)
         self.tagged = filepath.pornfile
-        tags = " ".join([t.tag for t in self.tagged.tags])
+        tags = self.clip.moviefile.tagString()
         self.tag_button = MenuButton('t', 'Tags: {}'.format(tags), self.editTags)
         buttons = [self.tag_button,
                    MenuButton('n', 'Next', self.nextFile),
@@ -120,8 +125,8 @@ class TagEditor(MenuPadding):
 
 class ClipMenuPadding(MenuPadding):
     def __init__(self, clip, project, adjuster=None, title_prefix=''):
-        filepath = clip.moviefile.getActivePath()
-        clips = [c for c in filepath.pornfile._clips if c.project_id == project.id_]
+        self.filepath = clip.moviefile.getActivePath()
+        clips = [c for c in self.filepath.pornfile._clips if c.project_id == project.id_]
         active = [c for c in clips if c.active]
         total = sum(c.duration for c in active)
         try:
@@ -130,7 +135,7 @@ class ClipMenuPadding(MenuPadding):
         except ZeroDivisionError:
             fraction = 0.0
         title = u"{}{}: {} sec ({} total, {} / {})".format(
-            title_prefix, filepath.path, clip.duration, total, numer, denom)
+            title_prefix, self.filepath.path, clip.duration, total, numer, denom)
         tags = " ".join([t.tag for t in clip.tags])
         self.keep = True
         self.skip = False
@@ -139,15 +144,30 @@ class ClipMenuPadding(MenuPadding):
         self.clip = clip
         self.adjuster = adjuster
         self.tag_button = MenuButton('t', 'Tags: {}'.format(tags), self.editTags)
+        self.movie_button = MenuButton('m', self._getMovieButtonLabel(), self.editMovie)
         buttons = [self.tag_button,
                    MenuButton('a', 'Adjust', self.adjust),
                    MenuButton('d', 'Delete', self.delete),
                    MenuButton('e', 'Replay', self.sameMovie),
                    MenuButton('s', 'Save', self.nextFile),
                    MenuButton('k', 'Skip Movie', self.skipMovie),
-                   MenuButton('m', 'Add Movies', self.addMovies),
+                   self.movie_button,
                    MenuButton('q', 'Quit', self.quit)]
         super(ClipMenuPadding, self).__init__(title=title, buttons=buttons)
+
+    def _getMovieButtonLabel(self):
+        girls = self.clip.moviefile.girlString()
+        tags =  self.clip.moviefile.tagString()
+        return ['Edit Movie ', ('bold', '({})'.format(girls)), ' ({})'.format(tags)]
+
+    def editMovie(self, button):
+        def done():
+            self.movie_button.set_label(self._getMovieButtonLabel())
+            self.toMain()
+        fmp = _FileMenuPadding(self.filepath)
+        fmp.setLoop(self._loop)
+        fmp.addFinishedHandler(self.toMain)
+        self.original_widget = fmp
 
     def addMovies(self, button):
         def done():
@@ -171,24 +191,20 @@ class ClipMenuPadding(MenuPadding):
         self.skip = True
         self.nextFile(button)
 
-class FileMenuPadding(MenuPadding):
-    def __init__(self, filepath, rating):
+
+class _FileMenuPadding(MenuPadding):
+    def __init__(self, filepath):
         self.filepath = filepath
-        self.rating = rating
         self.tagged = filepath.pornfile
         self.file_ = filepath.pornfile
         tags = " ".join([t.tag for t in self.file_.tags])
         girls = " ".join([g.name for g in self.file_.girls])
-        self._r = rating.getRating(filepath.pornfile)
         self.tag_button = MenuButton('t', 'Tags: {}'.format(tags), self.editTags)
         title = filepath.path
         buttons = [MenuButton('g', 'Girls: {}'.format(girls), self.editGirls),
                    self.tag_button,
-                   MenuButton('r', 'Rating: {}'.format(self._r), self.changeRating),
-                   MenuButton('e', 'Replay', self.sameMovie),
-                   MenuButton('n', 'Next', self.nextFile),
-                   MenuButton('q', 'Quit', self.quit)]
-        super(FileMenuPadding, self).__init__(title, buttons)
+                   MenuButton('d', 'done', self.sameMovie)]
+        MenuPadding.__init__(self, title, buttons)
 
     def editGirls(self, button):
         def done():
@@ -201,6 +217,27 @@ class FileMenuPadding(MenuPadding):
         edit = QuestionBox(done, self.toMain, 'Edit girls: ', girls)
         fe = FileEditor(self.title, edit)
         self.original_widget = fe
+
+
+class FileMenuPadding(_FileMenuPadding):
+    def __init__(self, filepath, rating):
+        self.filepath = filepath
+        self.rating = rating
+        self.tagged = filepath.pornfile
+        self.file_ = filepath.pornfile
+        tags = " ".join([t.tag for t in self.file_.tags])
+        girls = " ".join([g.name for g in self.file_.girls])
+        self.tag_button = MenuButton('t', 'Tags: {}'.format(tags), self.editTags)
+        title = filepath.path
+        buttons = [MenuButton('g', 'Girls: {}'.format(girls), self.editGirls),
+                   self.tag_button,
+                   MenuButton('e', 'Replay', self.sameMovie),
+                   MenuButton('n', 'Next', self.nextFile),
+                   MenuButton('q', 'Quit', self.quit)]
+        if rating:
+            self._r = rating.getRating(filepath.pornfile)
+            buttons.insert(2, MenuButton('r', 'Rating: {}'.format(self._r), self.changeRating))
+        MenuPadding.__init__(self, title, buttons)
 
     def changeRating(self, button):
         def done():

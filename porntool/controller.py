@@ -26,6 +26,7 @@ class BaseController(widget.OnFinished, widget.LoopAware):
     def __init__(self, filepath, status_widget, **kwds):
         self.filepath = filepath
         self.widget = status_widget
+        status_widget.setStatus(filepath.path, 0)
         self.player = player.SlavePlayer(filepath, **kwds)
         self.player.addFinishedHandler(self.onFinished)
         widget.OnFinished.__init__(self)
@@ -58,9 +59,6 @@ class BaseController(widget.OnFinished, widget.LoopAware):
 
 class FlagController(BaseController):
     """A controller that lets a user flag locations in a movie"""
-    def __init__(self, *args, **kwds):
-        super(FlagController, self).__init__(*args, **kwds)
-
     def addFlagNow(self):
         location = self.player.getTime()
         file_id = self.filepath.file_id
@@ -107,6 +105,7 @@ class ScoutController(BaseController):
                 self.reviewer.activate()
             else:
                 super(ScoutController, self).consume(key)
+
 
 class AdjustController(BaseController):
     def __init__(self, clip, status_widget, bold_palette_name='bold', *args, **kwds):
@@ -169,18 +168,35 @@ class AdjustController(BaseController):
                 self.clip.setEnd(self.adjuster.current_position)
         self.setStatus()
 
+    def _isOverlap(self, time):
+        project_clips = sorted(
+            [c for c in self.clip.moviefile._clips
+             if c.project_id == self.clip.project_id and c.active], key=lambda x: x.start)
+        for clip in project_clips:
+            if clip.start <= time <= clip.end:
+                return True
+        return False
+
     def setStatus(self):
+        start_text = 'Start: {}'.format(self.clip.start)
+        end_text = 'End: {}'.format(self.clip.end)
+        if self._isOverlap(self.clip.start):
+            start_text = '**' + start_text + '**, '
+        else:
+            start_text += ', '
+        if self._isOverlap(self.clip.end):
+            end_text = '**' + end_text + '**'
         if self.adjuster:
             if self.side == 'start':
                 status = ['Edit: ',
-                          (self.bold_palette_name, 'Start: {} '.format(self.clip.start)),
-                          'End: {}'.format(self.clip.end)]
+                          (self.bold_palette_name, start_text),
+                          end_text]
             elif self.side == 'end':
                 status = ['Edit: ',
-                          'Start: {} '.format(self.clip.start),
-                          (self.bold_palette_name, 'End: {}'.format(self.clip.end))]
+                          start_text,
+                          (self.bold_palette_name, end_text)]
         else:
-            status = 'Start: {}, End: {}'.format(self.clip.start, self.clip.end)
+            status = start_text + end_text
         self.widget.setStatus(status)
 
     def editStartBoundry(self):

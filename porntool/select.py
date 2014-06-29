@@ -9,8 +9,10 @@ def getParser(default_clip_type='shuffle', default_tracker='sample'):
     parser.add_argument(
         '-n', '--nfiles', default=20, type=int, help='number of files to rotate through')
     parser.add_argument('--clip-type', choices=('least', 'shuffle'), default=default_clip_type)
-    parser.add_argument('--tracker', choices=('new', 'existing', 'sample'), default=default_tracker)
+    parser.add_argument(
+        '--tracker', choices=('new', 'existing', 'sample', 'margin'), default=default_tracker)
     parser.add_argument('--sample-size', default=10, type=int)
+    parser.add_argument('--min-margin', default=120, type=int)
     parser.add_argument('--max-clips', type=int, help=(
             'when selecting movies, only pick ones that have less then this many '
             'clips already reviewed'))
@@ -43,10 +45,13 @@ def getClipPickerType(args, extras=None):
 
 
 def getSegmentTrackerType(args):
+    margins = [m for m in (120, 60, 30, 10, 0) if m >= args.min_margin]
     segment_trackers = {
         'new': segment.PriorityRandomSegmentTracker,
         'existing': segment.ExistingSegmentTracker,
         'sample': lambda fp, proj, rating: segment.CountSegmentTracker(
-            fp, proj, rating, args.sample_size)
+            fp, proj, rating, args.sample_size),
+        'margin': lambda fp, proj, rating: segment.MarginSegmentTracker(
+            fp, proj, rating, margins),
         }
     return segment_trackers[args.tracker]

@@ -16,7 +16,6 @@ from porntool import menu
 from porntool import movie
 from porntool import player
 from porntool import rating
-from porntool import reviewer
 from porntool import script
 from porntool import segment
 from porntool import select
@@ -55,7 +54,7 @@ def inventoryFilter(inventory):
 
 
 class ClipPlayer(object):
-    def __init__(self, clip_picker, fill, project, extra, no_edit):
+    def __init__(self, clip_picker, fill, project, extra, no_edit, skip_preview=False):
         self.clip_picker = clip_picker
         self.fill = fill
         self.project = project
@@ -63,6 +62,8 @@ class ClipPlayer(object):
         self.extra = extra
         self.no_edit = no_edit
         self.controller = None
+        # set to True to just go straight to editing a clip
+        self.skip_preview = skip_preview
 
     def setLoop(self, loop):
         self.loop = loop
@@ -91,7 +92,10 @@ class ClipPlayer(object):
 
     def setupController(self, clip):
         filepath = clip.moviefile.getActivePath()
-        self.controller = controller.BaseController(filepath, self.fill, extra=self.extra)
+        if self.skip_preview:
+            self.controller = controller.AdjustController(clip, self.fill, extra=self.extra)
+        else:
+            self.controller = controller.BaseController(filepath, self.fill, extra=self.extra)
         self.controller.setLoop(self.loop.event_loop)
         self.controller.player.save_scrub = False
         self.loop.widget = self.fill # is this line necessary?
@@ -102,9 +106,12 @@ class ClipPlayer(object):
                 self.playNextClip()
             else:
                 self._editClip(clip)
-        #self.controller.player.communicate('volume 10 1')
-        self.controller.player.seekAndPlay(
-            start=clip.start, duration=clip.duration, onFinished=finish)
+        if self.skip_preview:
+            self.controller.addFinishedHandler(self._editClip, clip=clip)
+            self.controller.start()
+        else:
+            self.controller.player.seekAndPlay(
+                start=clip.start, duration=clip.duration, onFinished=finish)
 
     def playNextClip(self, fmp=None, *args):
         # first, process the last one, if need be
@@ -120,7 +127,7 @@ class ClipPlayer(object):
             if hasattr(fmp, 'skip') and fmp.skip:
                 logger.debug('Skipping file')
                 db.getSession().delete(fmp.clip)
-                self.clip_picker.removeTracker()
+                self.clip_picker.replaceTracker()
                 self.skipped_files.append(self.clip_picker.current_tracker.filepath)
             if hasattr(fmp, 'add') and fmp.add:
                 self.clip_picker.addTrackers(fmp.add)

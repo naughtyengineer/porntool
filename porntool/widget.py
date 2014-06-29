@@ -35,8 +35,9 @@ class LoopAware(object):
 
 class Status(urwid.Filler):
     def __init__(self, *args, **kwds):
-        self._status = urwid.Text('')
-        super(Status, self).__init__(body=self._status, *args, **kwds)
+        self._status = [urwid.Text(''), urwid.Text('')]
+        self._pile = urwid.Pile(self._status)
+        super(Status, self).__init__(body=self._pile, *args, **kwds)
 
-    def setStatus(self, new_status):
-        self._status.set_text(new_status)
+    def setStatus(self, new_status, index=1):
+        self._status[index].set_text(new_status)

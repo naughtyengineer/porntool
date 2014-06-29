@@ -49,6 +49,11 @@ class PornFile(Base):
             if os.path.exists(path.path):
                 return path
 
+    def tagString(self):
+        return " ".join([t.tag for t in self.tags if not t.tag.startswith('file:')])
+
+    def girlString(self):
+        return " ".join([g.name for g in self.girls])
 
 class MovieFile(PornFile):
     __tablename__ = 'movie'

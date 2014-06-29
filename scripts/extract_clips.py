@@ -175,17 +175,23 @@ try:
         clips.append(next_clip)
 
     if ARGS.resolution:
-        w,h = ARGS.resolution.split('x')
-        resolution = extract.Resolution(float(w), float(h))
+        if ARGS.resolution == 'native':
+            resolution = None
+        else:
+            w,h = ARGS.resolution.split('x')
+            resolution = extract.Resolution(float(w), float(h))
     else:
         resolution = extract.getTargetResolutionClips(clips)
 
     playlist = os.path.join(ARGS.output, 'playlist-{}.txt'.format(
         datetime.datetime.now().strftime('%Y%m%d%H%M')))
-    whites = makeSolidClips(ARGS.output, WHITE, resolution, [3, 3, 3,  4,  4,  5,  6,  7,  8])
-    blacks = makeSolidClips(ARGS.output, BLACK, resolution, [9, 9, 9, 10, 10, 11, 12, 13, 14])
-    logging.debug('len(whites) = %s', len(whites))
-    logging.debug('len(blacks) = %s', len(blacks))
+    if resolution:
+        whites = makeSolidClips(ARGS.output, WHITE, resolution, [3, 3, 3,  4,  4,  5,  6,  7,  8])
+        blacks = makeSolidClips(ARGS.output, BLACK, resolution, [9, 9, 9, 10, 10, 11, 12, 13, 14])
+        logging.debug('len(whites) = %s', len(whites))
+        logging.debug('len(blacks) = %s', len(blacks))
+    else:
+        whites = blacks = []
     if not ARGS.only_blanks:
         image_clip_filenames = []
         if ARGS.images:
