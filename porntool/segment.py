@@ -235,7 +235,7 @@ class SegmentTracker(object):
             if eclip.start <= start <= eclip.end:
                 overlap_found = True
                 break
-            if eclip.start <=end <= eclip.end:
+            if eclip.start <= end <= eclip.end:
                 overlap_found = True
                 break
         if overlap_found:

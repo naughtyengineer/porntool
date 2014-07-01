@@ -130,6 +130,10 @@ def applyArgs(args, session):
         all_filters.append(IncludeTags(args.include_tags))
     if args.exclude_tags:
         all_filters.append(ExcludeTags(args.exclude_tags))
+    if args.include_girls:
+        all_filters.append(IncludeGirls(args.include_girls))
+    if args.exclude_girls:
+        all_filters.append(ExcludeGirls(args.exclude_girls))
     if args.exclude_files:
         for filename in args.exclude_files:
             with open(filename) as f:

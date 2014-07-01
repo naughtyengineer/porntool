@@ -11,6 +11,7 @@ from porntool import clippicker
 from porntool import db
 from porntool import extract
 from porntool import filters
+from porntool import library
 from porntool import movie
 from porntool import player
 from porntool import project
@@ -126,7 +127,7 @@ def processClips(clips, output_dir, resolution=None):
 parser = argparse.ArgumentParser(
     description='Extract clips from porn collection',
     parents=[select.getParser(default_tracker='existing'),
-             filters.getParser(), project.getParser()])
+             filters.getParser(), project.getParser(), library.getParser()])
 parser.add_argument('files', nargs='*', help='files to play; play entire collection if omitted')
 parser.add_argument('--output', help='directory for output', default='.')
 parser.add_argument('--time', default=5, type=int, help="minutes of clips to extract")
@@ -141,13 +142,7 @@ try:
     script.standardSetup(copy_db=False, file_handler=False)
     logging.info('****** Starting new script ********')
 
-    filepaths = []
-    for file_ in ARGS.files:
-        some_filepaths = db.getSession().query(t.FilePath).filter(
-            (t.FilePath.hostname == util.hostname) &
-            (t.FilePath.path.like('{}%'.format(file_)))
-        ).all()
-        filepaths.extend(some_filepaths)
+    filepaths = library.getFilePaths(ARGS)
 
     all_filters = [filters.Exists(), filters.IsMovie(), filters.ByMinCount(db.getSession(), 1),
                    filters.ExcludeTags(['pmv', 'cock.hero', 'compilation'])]
