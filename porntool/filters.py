@@ -71,7 +71,7 @@ class IncludeGirls(object):
         self.girls = set(girls)
 
     def __call__(self, filepath):
-        return (set([g.name for g in filepath.pornfile.girls]) & self.girls) == self.girls
+        return len(set([g.name for g in filepath.pornfile.girls]) & self.girls) > 0
 
 
 class ExcludeGirls(object):

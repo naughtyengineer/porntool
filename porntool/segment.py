@@ -114,7 +114,6 @@ class SegmentTracker(object):
                 self.addRow(rows, start, end, 0)
                 start = end
 
-
     def addRowsByScrubs(self, rows):
         pornfile = self.filepath.pornfile
         query = sql.select(
@@ -149,13 +148,25 @@ class SegmentTracker(object):
                     self.addRow(rows, start, end, 1)
                     break
 
+    def _getGapTotal(self, rows, total_length, margin):
+        current_mark = 0
+        duration = 0
+        for row in rows:
+            margined_start = row.start - margin
+            duration += max(0, margined_start - current_mark)
+            current_mark = row.end + margin
+        # add on the end
+        duration += max(0, total_length - current_mark)
+        return duration
+
     def addRowsUniform(self, rows, target_fraction=None, count=None, margins=None):
         """
         Args:
+            rows: existing rows
             target_fraction: if specified, will try to find clips until that much of the movie
                 is choosen
             count: will continue to try to add rows until `count` rows are available
-            margins: ordered list of margini to leave around already selected clips
+            margins: ordered list of margins to leave around already selected clips
         """
         pornfile = self.filepath.pornfile
         duration = sum(pc.end - pc.start for pc in rows)
@@ -183,11 +194,12 @@ class SegmentTracker(object):
         # we reduce the margin and try again, and again, and again
         existing_rows = len(rows)
         for margin in margins:
+            gap_total = self._getGapTotal(rows, pornfile.length, margin)
             if not condCheck():
                 break
             failed_count = 0
             while condCheck() and failed_count < 10:
-                start = round(random.random() * (pornfile.length - duration), 1)
+                start = round(random.random() * gap_total, 1)
                 location, remaining = self.traverseGaps(rows, start, pornfile.length, margin)
                 if remaining < 1.5:
                     failed_count += 1
@@ -198,6 +210,7 @@ class SegmentTracker(object):
                 rows.append(PotentialClip(location, end, 2))
                 rows.sort()
                 duration += length
+                gap_total = self._getGapTotal(rows, pornfile.length, margin)
             logger.debug('For margin %s, found %s rows', margin, len(rows) - existing_rows)
             existing_rows = len(rows)
 
