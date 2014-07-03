@@ -44,17 +44,18 @@ class ExcludeClipTag(object):
         return True
 
 
-class OneSegmentTracker(segment.SegmentTracker):
-    def __init__(self, filepath, project, *args):
+class SameSegmentTracker(segment.SegmentTracker):
+    def __init__(self, filepath, project, max_count=None, *args):
         self.filepath = filepath
         self.project = project
-        self.triggered = False
+        self.max_count = max_count
+        self.current_count = 0
 
     def nextClip(self):
-        if self.triggered:
+        if self.max_count and self.current_count >= self.max_count:
             return None
         else:
-            self.triggered = True
+            self.current_count += 1
             start = max(0, self.filepath.pornfile.length - 60)
             return self._makeClip(
                 file_id=self.filepath.file_id, project_id=self.project.id_,
@@ -91,10 +92,9 @@ try:
 
     PROJECT = project.getProject(ARGS)
 
-    all_filters = [
-        filters.ExcludeTags(['pmv', 'cock.hero', 'compilation', 'solo', 'lesbian']),
-        ExcludeClipTag(PROJECT, ARGS.clip_tag)
-    ]
+    all_filters = [filters.ExcludeTags(['pmv', 'cock.hero', 'compilation', 'solo', 'lesbian'])]
+    if ARGS.clip_tag.lower != 'none':
+        all_filters.append(ExcludeClipTag(PROJECT, ARGS.clip_tag))
     all_filters.extend(filters.applyArgs(ARGS, db.getSession()))
 
     inventory = movie.MovieInventory(filepaths, ARGS.shuffle, all_filters)
@@ -103,7 +103,7 @@ try:
 
     normalratings = rating.NormalRatings(db.getSession())
 
-    clip_picker = Picker(iinventory, PROJECT, normalratings, 20, OneSegmentTracker)
+    clip_picker = Picker(iinventory, PROJECT, normalratings, 20, SameSegmentTracker)
 
     FILL = widget.Status(valign='bottom')
 
